@@ -328,7 +328,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nginx-log-exporter"
+name = "nginx-logs-exporter"
 version = "0.1.0"
 dependencies = [
  "async-stream",
