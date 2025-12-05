@@ -1,10 +1,13 @@
 use std::{
     collections::VecDeque,
     env,
+    io::Write,
     sync::Arc,
     time::{Duration, SystemTime},
 };
 
+use async_stream::stream;
+use axum::response::sse::{Event, Sse};
 use axum::{
     Json, Router,
     extract::{Query, State},
@@ -12,12 +15,15 @@ use axum::{
     response::{Html, IntoResponse, Response},
     routing::get,
 };
+use flate2::{Compression, write::GzEncoder};
 use lazy_static::lazy_static;
 use prometheus::{
     Encoder, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, Opts, Registry, TextEncoder,
     linear_buckets,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::convert::Infallible;
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, AsyncSeekExt, BufReader},
@@ -26,10 +32,13 @@ use tokio::{
 };
 
 const MAX_LINES_PER_LOG: usize = 2000;
-
+const UI_TEMPLATE: &str = include_str!("../templates/ui.html");
 #[derive(Clone)]
 struct AppState {
     log_state: Arc<RwLock<LogState>>,
+    access_log_path: String,
+    error_log_path: String,
+    ui_title: String,
 }
 
 #[derive(Default)]
@@ -61,7 +70,6 @@ fn log_kind_name(kind: LogKind) -> &'static str {
  */
 
 lazy_static! {
-    // HTTP status kódy (z pohledu klienta)
     static ref HTTP_STATUS_TOTAL: IntCounterVec = IntCounterVec::new(
         Opts::new(
             "nginx_http_status_total",
@@ -70,8 +78,6 @@ lazy_static! {
         &["status"]
     )
     .unwrap();
-
-    // HTTP status třídy (2xx, 4xx, 5xx…)
     static ref HTTP_STATUS_CLASS_TOTAL: IntCounterVec = IntCounterVec::new(
         Opts::new(
             "nginx_http_status_class_total",
@@ -80,13 +86,11 @@ lazy_static! {
         &["class"]
     )
     .unwrap();
-
-    // Všechny 502 z pohledu klienta
-    static ref HTTP_502_TOTAL: IntCounter =
-        IntCounter::new("nginx_http_502_total", "Number of HTTP 502 Bad Gateway responses")
-            .unwrap();
-
-    // Metriky per upstream: kolik odpovědí a jaké upstream statusy
+    static ref HTTP_502_TOTAL: IntCounter = IntCounter::new(
+        "nginx_http_502_total",
+        "Number of HTTP 502 Bad Gateway responses"
+    )
+    .unwrap();
     static ref UPSTREAM_STATUS_TOTAL: IntCounterVec = IntCounterVec::new(
         Opts::new(
             "nginx_upstream_status_total",
@@ -95,19 +99,15 @@ lazy_static! {
         &["upstream_addr", "status"]
     )
     .unwrap();
-
-    // Histogram request_time podle upstream_addr
-    // request_time je v sekundách (float), buckets: 10ms..~1s
     static ref HTTP_REQUEST_DURATION_SECONDS: HistogramVec = {
-        let buckets = linear_buckets(0.01, 0.05, 20)  // 0.01, 0.06, 0.11, ... ~1.0s
-            .expect("invalid histogram buckets");
+        let buckets = linear_buckets(0.01, 0.05, 20).expect("invalid histogram buckets");
         let opts = HistogramOpts::new(
             "nginx_http_request_duration_seconds",
-            "Histogram of Nginx request_time in seconds, labelled by upstream_addr"
-        ).buckets(buckets);
+            "Histogram of Nginx request_time in seconds, labelled by upstream_addr",
+        )
+        .buckets(buckets);
         HistogramVec::new(opts, &["upstream_addr"]).unwrap()
     };
-
     static ref REGISTRY: Registry = {
         let registry = Registry::new();
         registry
@@ -146,9 +146,13 @@ async fn main() {
     // Prefix pro UI (např. "/es-proxy")
     let ui_prefix_raw = env::var("NGINX_UI_PUBLIC_PREFIX").unwrap_or_default();
     let ui_prefix = normalize_prefix(&ui_prefix_raw);
+    let ui_title = env::var("NGINX_UI_TITLE").unwrap_or_else(|_| "Nginx logs".to_string());
 
     let state = AppState {
         log_state: Arc::new(RwLock::new(LogState::default())),
+        access_log_path: access_log_path.clone(),
+        error_log_path: error_log_path.clone(),
+        ui_title,
     };
 
     // tail access.log
@@ -168,19 +172,28 @@ async fn main() {
         .route("/", get(ui_handler))
         .route("/ui", get(ui_handler))
         .route("/healthz", get(healthz_handler))
-        .route("/metrics", get(metrics_handler));
+        .route("/metrics", get(metrics_handler))
+        .route("/access.log.gz", get(download_access_log_handler))
+        .route("/error.log.gz", get(download_error_log_handler))
+        .route("/logs/stream", get(logs_sse_handler));
 
-    // Pokud máme prefix (např. "/es-proxy"), přidáme i prefixované UI routy
+    // Prefixované routy (např. "/es-proxy/ui", "/es-proxy/logs/stream")
     if let Some(prefix) = ui_prefix {
         let prefix_root = prefix.clone();
         let prefix_ui = format!("{}/ui", prefix_root);
+        let prefix_access = format!("{}/access.log.gz", prefix_root);
+        let prefix_error = format!("{}/error.log.gz", prefix_root);
+        let prefix_stream = format!("{}/logs/stream", prefix_root);
         println!(
             "Registering UI routes with prefix: '{}' and '{}'",
             prefix_root, prefix_ui
         );
         app = app
             .route(&prefix_root, get(ui_handler))
-            .route(&prefix_ui, get(ui_handler));
+            .route(&prefix_ui, get(ui_handler))
+            .route(&prefix_access, get(download_access_log_handler))
+            .route(&prefix_error, get(download_error_log_handler))
+            .route(&prefix_stream, get(logs_sse_handler));
     }
 
     let app = app.with_state(state);
@@ -197,16 +210,13 @@ fn normalize_prefix(s: &str) -> Option<String> {
     if s.is_empty() || s == "/" {
         return None;
     }
-
     let mut pref = s.to_string();
-
     if !pref.starts_with('/') {
         pref = format!("/{}", pref);
     }
     while pref.ends_with('/') {
         pref.pop();
     }
-
     if pref.is_empty() || pref == "/" {
         None
     } else {
@@ -225,7 +235,7 @@ async fn tail_file_loop(path: String, kind: LogKind, state: AppState) {
             Ok(mut file) => {
                 println!("Opened log file {:?} for {:?}", path, log_kind_name(kind));
 
-                // Chceme chování jako tail -F: začít od konce
+                // Startujeme na konci souboru (tail -F chování)
                 if let Err(e) = file.seek(std::io::SeekFrom::End(0)).await {
                     eprintln!("Failed to seek to end of {}: {}", path, e);
                 }
@@ -289,7 +299,7 @@ async fn handle_log_line(line: &str, kind: LogKind, state: &AppState) {
     let now = SystemTime::now();
 
     {
-        // update ring bufferu pro UI + healthz
+        // update ring bufferů pro UI + healthz
         let mut log_state = state.log_state.write().await;
         match kind {
             LogKind::Access => {
@@ -324,8 +334,6 @@ async fn handle_log_line(line: &str, kind: LogKind, state: &AppState) {
  */
 
 mod parser {
-    #[allow(unused_imports)]
-    use super::*;
 
     #[derive(Debug, Clone)]
     pub struct ParsedAccess {
@@ -340,7 +348,7 @@ mod parser {
     pub fn parse_access_line(line: &str) -> ParsedAccess {
         let status = parse_status_code_from_access(line);
 
-        // upstream_status=200,502,404 → bereme první (200)
+        // upstream_status=200,502,... → bereme první
         let upstream_status = extract_kv_value(line, "upstream_status=")
             .and_then(|v| v.split(',').next())
             .and_then(parse_status_field);
@@ -440,89 +448,58 @@ mod metrics_layer {
 }
 
 /* ===========================
- *  UI (/ a /ui [+ prefix])
+ *  UI + HTML
  * ===========================
  */
 
 #[derive(Deserialize)]
 struct UiQuery {
     limit: Option<usize>,
+    refresh: Option<u64>,
+}
+
+#[derive(Deserialize)]
+struct LogsSseQuery {
+    limit: Option<usize>,
+    interval: Option<u64>,
 }
 
 async fn ui_handler(State(state): State<AppState>, Query(params): Query<UiQuery>) -> Html<String> {
     let limit = params.limit.unwrap_or(50).min(MAX_LINES_PER_LOG).max(1);
+    let refresh = params.refresh.unwrap_or(10).clamp(1, 3600);
 
     let log_state = state.log_state.read().await;
-
     let access_text = tail_as_string(&log_state.access_lines, limit);
     let error_text = tail_as_string(&log_state.error_lines, limit);
 
-    let html = render_ui_page(limit, &access_text, &error_text);
+    let html = render_ui_page(&state.ui_title, limit, refresh, &access_text, &error_text);
     Html(html)
 }
 
-fn tail_as_string(lines: &VecDeque<String>, limit: usize) -> String {
+fn tail_as_vec(lines: &VecDeque<String>, limit: usize) -> Vec<String> {
     let len = lines.len();
     let start = len.saturating_sub(limit);
-    lines
-        .iter()
-        .skip(start)
-        .cloned()
-        .collect::<Vec<_>>()
-        .join("\n")
+    lines.iter().skip(start).cloned().collect()
 }
 
-fn render_ui_page(limit: usize, access: &str, error: &str) -> String {
+fn tail_as_string(lines: &VecDeque<String>, limit: usize) -> String {
+    tail_as_vec(lines, limit).join("\n")
+}
+
+fn render_ui_page(title: &str, limit: usize, refresh: u64, access: &str, error: &str) -> String {
+    let escaped_title = html_escape(title);
     let escaped_access = html_escape(access);
     let escaped_error = html_escape(error);
-    let options = render_limit_options(limit);
+    let limit_options = render_limit_options(limit);
+    let refresh_options = render_refresh_options(refresh);
 
-    format!(
-        r#"<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Nginx log viewer</title>
-  <style>
-    body {{ font-family: sans-serif; margin: 1rem; }}
-    h1 {{ margin-bottom: 0.5rem; }}
-    .logs-container {{ display: flex; gap: 1rem; }}
-    .log-box {{ flex: 1; min-width: 0; }}
-    pre {{ background: #111; color: #eee; padding: 0.5rem; border-radius: 4px;
-          max-height: 70vh; overflow-y: auto; font-size: 12px; }}
-    form {{ margin-bottom: 1rem; }}
-    label {{ margin-right: 0.5rem; }}
-    select {{ padding: 0.2rem; }}
-    button {{ padding: 0.2rem 0.6rem; }}
-  </style>
-</head>
-<body>
-  <h1>Nginx logs</h1>
-  <form method="get" action="">
-    <label for="limit">Lines per log:</label>
-    <select name="limit" id="limit">
-      {options}
-    </select>
-    <button type="submit">Reload</button>
-  </form>
-  <div class="logs-container">
-    <div class="log-box">
-      <h2>access.log (last {limit} lines)</h2>
-      <pre>{access}</pre>
-    </div>
-    <div class="log-box">
-      <h2>error.log (last {limit} lines)</h2>
-      <pre>{error}</pre>
-    </div>
-  </div>
-</body>
-</html>
-"#,
-        limit = limit,
-        access = escaped_access,
-        error = escaped_error,
-        options = options,
-    )
+    UI_TEMPLATE
+        .replace("__TITLE__", &escaped_title)
+        .replace("__LIMIT__", &limit.to_string())
+        .replace("__ACCESS__", &escaped_access)
+        .replace("__ERROR__", &escaped_error)
+        .replace("__LIMIT_OPTIONS__", &limit_options)
+        .replace("__REFRESH_OPTIONS__", &refresh_options)
 }
 
 fn render_limit_options(current: usize) -> String {
@@ -532,6 +509,20 @@ fn render_limit_options(current: usize) -> String {
         let selected = if value == current { " selected" } else { "" };
         out.push_str(&format!(
             r#"<option value="{value}"{selected}>{value}</option>"#,
+            value = value,
+            selected = selected
+        ));
+    }
+    out
+}
+
+fn render_refresh_options(current: u64) -> String {
+    let choices = [5u64, 10, 30, 60];
+    let mut out = String::new();
+    for &value in &choices {
+        let selected = if value == current { " selected" } else { "" };
+        out.push_str(&format!(
+            r#"<option value="{value}"{selected}>{value}s</option>"#,
             value = value,
             selected = selected
         ));
@@ -610,12 +601,95 @@ fn system_time_to_unix_secs(t: SystemTime) -> u64 {
 }
 
 /* ===========================
+ *  Log downloads (gzipped)
+ * ===========================
+ */
+
+async fn download_access_log_handler(State(state): State<AppState>) -> Response {
+    download_log_handler_impl(state.access_log_path.clone(), "access.log.gz").await
+}
+
+async fn download_error_log_handler(State(state): State<AppState>) -> Response {
+    download_log_handler_impl(state.error_log_path.clone(), "error.log.gz").await
+}
+
+async fn download_log_handler_impl(log_path: String, download_name: &'static str) -> Response {
+    match tokio::fs::read(&log_path).await {
+        Ok(content) => {
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+            if let Err(e) = encoder.write_all(&content) {
+                eprintln!("failed to gzip {}: {}", log_path, e);
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+            let gz_bytes = match encoder.finish() {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    eprintln!("failed to finish gzip {}: {}", log_path, e);
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+            };
+
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(CONTENT_TYPE, "application/gzip")
+                .header("Content-Encoding", "gzip")
+                .header(
+                    "Content-Disposition",
+                    format!("attachment; filename=\"{}\"", download_name),
+                )
+                .body(gz_bytes.into())
+                .unwrap_or_else(|e| {
+                    eprintln!("failed to build response for {}: {}", log_path, e);
+                    StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                })
+        }
+        Err(e) => {
+            eprintln!("failed to read log file {}: {}", log_path, e);
+            StatusCode::NOT_FOUND.into_response()
+        }
+    }
+}
+
+/* ===========================
+ *  SSE /logs/stream
+ * ===========================
+ */
+
+async fn logs_sse_handler(
+    State(state): State<AppState>,
+    Query(params): Query<LogsSseQuery>,
+) -> Response {
+    let limit = params.limit.unwrap_or(50).min(MAX_LINES_PER_LOG).max(1);
+    let interval_secs = params.interval.unwrap_or(10).max(1);
+
+    let stream = stream! {
+        let mut ticker = tokio::time::interval(Duration::from_secs(interval_secs));
+        loop {
+            ticker.tick().await;
+
+            let (access, error) = {
+                let log_state = state.log_state.read().await;
+                let access = tail_as_vec(&log_state.access_lines, limit);
+                let error = tail_as_vec(&log_state.error_lines, limit);
+                (access, error)
+            };
+
+            let payload = json!({ "access": access, "error": error });
+            let data = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
+
+            yield Ok::<Event, Infallible>(Event::default().data(data));
+        }
+    };
+
+    Sse::new(stream).into_response()
+}
+
+/* ===========================
  *  /metrics
  * ===========================
  */
 
 async fn metrics_handler() -> Response {
-    // Tady se *jen* sahá do metrik v paměti – žádné čtení logů.
     let metric_families = REGISTRY.gather();
     let encoder = TextEncoder::new();
     let mut buffer = Vec::new();

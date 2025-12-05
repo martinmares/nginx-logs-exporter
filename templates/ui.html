@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>__TITLE__</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, #0f172a 0, #020617 55%, #000 100%);
+      color: #e5e7eb;
+    }
+    .app-shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .header {
+      padding: 16px 24px;
+      border-bottom: 1px solid rgba(15,23,42,0.9);
+      background: linear-gradient(90deg, rgba(15,23,42,0.95), rgba(30,64,175,0.4));
+      box-shadow: 0 10px 30px rgba(15,23,42,0.8);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      margin: 0;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.4);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #9ca3af;
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #22c55e, #16a34a);
+      box-shadow: 0 0 8px rgba(34,197,94,0.7);
+    }
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+    }
+    .controls label {
+      margin-right: 0.15rem;
+      color: #9ca3af;
+    }
+    .controls select {
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.5);
+      background: rgba(15,23,42,0.9);
+      color: #e5e7eb;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .controls button {
+      padding: 0.25rem 0.9rem;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: filter 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+
+    /* hlavní (Apply) */
+    .controls button.primary {
+      border: 1px solid rgba(59,130,246,0.6);
+      background: radial-gradient(circle at top left, #1d4ed8, #1e40af);
+      color: #e5e7eb;
+      box-shadow: 0 6px 18px rgba(37,99,235,0.45);
+    }
+
+    /* základní vzhled Pause (není pauznuté) */
+    #pause-btn {
+      border: 1px solid rgba(148,163,184,0.8);
+      background: transparent;
+      color: #e5e7eb;
+      box-shadow: none;
+    }
+
+    /* když je pauznuté → „warning“ look */
+    #pause-btn.paused {
+      border-color: rgba(248,113,113,0.9);
+      background: radial-gradient(circle at top left, rgba(248,113,113,0.18), rgba(127,29,29,0.55));
+      color: #fee2e2;
+      box-shadow: 0 0 12px rgba(248,113,113,0.6);
+    }
+
+    .controls button:hover {
+      filter: brightness(1.08);
+    }
+
+    .downloads {
+      font-size: 0.9rem;
+      color: #9ca3af;
+    }
+    .downloads a {
+      margin-left: 0.5rem;
+      color: #93c5fd;
+      text-decoration: none;
+    }
+    .downloads a:hover {
+      text-decoration: underline;
+    }
+    .content {
+      padding: 16px 24px 24px;
+      flex: 1;
+    }
+    .logs-container {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .log-box {
+      flex: 1 1 0;
+      min-width: 320px;
+    }
+    .log-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .log-card {
+      background: radial-gradient(circle at top left, rgba(15,23,42,0.98), rgba(15,23,42,0.96));
+      border-radius: 12px;
+      border: 1px solid rgba(30,64,175,0.6);
+      box-shadow: 0 18px 40px rgba(15,23,42,0.9);
+      padding: 6px;
+    }
+    pre {
+      background: #020617;
+      color: #e5e7eb;
+      padding: 0.5rem;
+      border-radius: 8px;
+      max-height: 70vh;
+      overflow-y: auto;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      margin: 0;
+      border: 1px solid rgba(15,23,42,0.9);
+    }
+    .hint {
+      margin-top: 8px;
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="header">
+      <div class="header-top">
+        <div>
+          <h1>__TITLE__</h1>
+          <div class="badge">
+            <span class="badge-dot"></span>
+            <span>live tail via sse</span>
+          </div>
+        </div>
+        <div class="downloads">
+          <strong>Download:</strong>
+          <a href="access.log.gz">access.log (gz)</a>
+          <a href="error.log.gz">error.log (gz)</a>
+        </div>
+      </div>
+      <div class="controls-row">
+        <form id="controls-form" class="controls">
+          <label for="limit">Lines per log</label>
+          <select name="limit" id="limit">
+            __LIMIT_OPTIONS__
+          </select>
+          <label for="refresh">Refresh</label>
+          <select name="refresh" id="refresh">
+            __REFRESH_OPTIONS__
+          </select>
+          <button type="submit" class="primary">Apply</button>
+          <button type="button" id="pause-btn">Pause</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="logs-container">
+        <section class="log-box">
+          <div class="log-title">access.log (latest __LIMIT__ lines)</div>
+          <div class="log-card">
+            <pre id="access-log">__ACCESS__</pre>
+          </div>
+        </section>
+        <section class="log-box">
+          <div class="log-title">error.log (latest __LIMIT__ lines)</div>
+          <div class="log-card">
+            <pre id="error-log">__ERROR__</pre>
+          </div>
+        </section>
+      </div>
+      <p class="hint">
+        Newest entries are shown at the top. Logs are updated live; controls change how many lines are kept in view and how often the server pushes updates.
+      </p>
+    </main>
+  </div>
+
+  <script>
+    (function() {
+      const limitSelect = document.getElementById('limit');
+      const refreshSelect = document.getElementById('refresh');
+      const form = document.getElementById('controls-form');
+      const accessPre = document.getElementById('access-log');
+      const errorPre = document.getElementById('error-log');
+      const pauseBtn = document.getElementById('pause-btn');
+
+      let es = null;
+      let isPaused = false;
+
+      function startStream() {
+        if (isPaused) {
+          return;
+        }
+        if (es) {
+          es.close();
+        }
+
+        const limit = limitSelect.value;
+        const interval = refreshSelect.value;
+        const params = new URLSearchParams({ limit, interval });
+        const sseUrl = 'logs/stream?' + params.toString();
+
+        es = new EventSource(sseUrl);
+
+        es.onmessage = function (event) {
+          try {
+            const data = JSON.parse(event.data);
+            if (Array.isArray(data.access)) {
+              accessPre.textContent = data.access.slice().reverse().join('\n');
+            }
+            if (Array.isArray(data.error)) {
+              errorPre.textContent = data.error.slice().reverse().join('\n');
+            }
+          } catch (e) {
+            console.error('Failed to parse SSE payload', e);
+          }
+        };
+
+        es.onerror = function (err) {
+          console.error('SSE error', err);
+        };
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const url = new URL(window.location.href);
+        url.searchParams.set('limit', limitSelect.value);
+        url.searchParams.set('refresh', refreshSelect.value);
+        window.history.replaceState(null, '', url.toString());
+        if (!isPaused) {
+          startStream();
+        }
+      });
+
+      pauseBtn.addEventListener('click', function () {
+        if (!isPaused) {
+          // Přechod do PAUSE
+          isPaused = true;
+          pauseBtn.textContent = 'Continue';
+          pauseBtn.classList.add('paused');
+          if (es) {
+            es.close();
+            es = null;
+          }
+        } else {
+          // Zpět na CONTINUE → resume
+          isPaused = false;
+          pauseBtn.textContent = 'Pause';
+          pauseBtn.classList.remove('paused');
+          startStream();
+        }
+      });
+
+      // initial connect
+      startStream();
+    })();
+  </script>
+</body>
+</html>
