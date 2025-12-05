@@ -66,7 +66,7 @@ fn log_kind_name(kind: LogKind) -> &'static str {
 }
 
 /* ===========================
- *  METRICS – s prefixem
+ *  METRICS - s prefixem
  * ===========================
  */
 
@@ -217,7 +217,7 @@ async fn main() {
         .route("/error.log.gz", get(download_error_log_handler))
         .route("/logs/stream", get(logs_sse_handler));
 
-    // prefixované routy – např. /es-proxy/ui
+    // prefixované routy - např. /es-proxy/ui
     if let Some(prefix) = ui_prefix {
         let prefix_root = prefix.clone();
         let prefix_ui = format!("{}/ui", prefix_root);
@@ -388,6 +388,7 @@ mod parser {
         pub upstream_addr: Option<String>,
         pub upstream_status: Option<u16>,
         pub request_time: Option<f64>,
+        pub upstream_label: Option<String>, // nově: logické jméno upstreamu
     }
 
     pub fn parse_access_line(line: &str) -> ParsedAccess {
@@ -408,12 +409,18 @@ mod parser {
         let request_time =
             extract_kv_value(line, "request_time=").and_then(|v| v.parse::<f64>().ok());
 
+        // upstream_label=tsm-gateway / tsm-internals-proxy / static-files
+        let upstream_label = extract_kv_value(line, "upstream_label=")
+            .map(|s| s.to_string())
+            .filter(|s| !s.is_empty() && s != "-");
+
         ParsedAccess {
             raw: line.to_string(),
             status,
             upstream_addr,
             upstream_status,
             request_time,
+            upstream_label,
         }
     }
 
@@ -427,7 +434,7 @@ mod parser {
         status_str.parse::<u16>().ok()
     }
 
-    fn extract_kv_value<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    pub fn extract_kv_value<'a>(line: &'a str, key: &str) -> Option<&'a str> {
         let idx = line.find(key)?;
         let rest = &line[idx + key.len()..];
         let end = rest.find(' ').unwrap_or(rest.len());
@@ -470,26 +477,30 @@ mod metrics_layer {
             }
         }
 
-        // Upstream label
-        let upstream_label = parsed.upstream_addr.as_deref().unwrap_or("<none>");
+        // Preferuj logické jméno upstreamu, pak IP:port, pak <none>
+        let upstream = parsed
+            .upstream_label
+            .as_deref()
+            .or(parsed.upstream_addr.as_deref())
+            .unwrap_or("<none>");
 
         // Upstream status
         if let Some(us) = parsed.upstream_status {
             let s = us.to_string();
             UPSTREAM_STATUS_TOTAL
-                .with_label_values(&[upstream_label, &s])
+                .with_label_values(&[upstream, &s])
                 .inc();
         }
 
-        // Histogram request_time (sekundy) podle upstream_addr
+        // Histogram request_time (sekundy) podle upstream (label "upstream_addr")
         if let Some(rt) = parsed.request_time {
             HTTP_REQUEST_DURATION_SECONDS
-                .with_label_values(&[upstream_label])
+                .with_label_values(&[upstream])
                 .observe(rt);
         }
     }
 
-    /// Zpracování řádků z error.log – upstream chyby podle reason + upstream.
+    /// Zpracování řádků z error.log - upstream chyby podle reason + upstream.
     pub fn record_error(line: &str) {
         // Zajímá nás jen něco, co se týká upstreamu
         if !line.contains("upstream") {
