@@ -507,6 +507,7 @@ mod metrics_layer {
             return;
         }
 
+        // Vytáhneme "reason" podle textu zprávy
         let reason = if line.contains("no live upstreams") {
             "no_live_upstream"
         } else if line.contains("upstream timed out") {
@@ -515,6 +516,12 @@ mod metrics_layer {
             "connect_failed"
         } else if line.contains("SSL_do_handshake() failed") || line.contains("SSL handshake") {
             "ssl_handshake"
+        } else if line.contains("upstream prematurely closed connection") {
+            // typicky SSE / nginx-ui-logs/logs/stream
+            "upstream_closed"
+        } else if line.contains("an upstream response is buffered to a temporary file") {
+            // velký response -> šel do temp souboru, není to "error" ve smyslu incidentu
+            "buffered_temp_file"
         } else {
             "other"
         };
