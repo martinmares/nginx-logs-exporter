@@ -13,6 +13,7 @@ touch .tmp/nginx-logs/error.log
 
 ACCESS_LOG_PATH=$(pwd)/.tmp/nginx-logs/access.log \
 ERROR_LOG_PATH=$(pwd)/.tmp/nginx-logs/error.log \
+METRICS_PREFIX="tsm_es_" \
 LISTEN_ADDR=127.0.0.1:9100 \
 NGINX_UI_PUBLIC_PREFIX="" \
 NGINX_UI_TITLE="es-proxy-logs" \

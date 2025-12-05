@@ -33,6 +33,7 @@ use tokio::{
 
 const MAX_LINES_PER_LOG: usize = 2000;
 const UI_TEMPLATE: &str = include_str!("../templates/ui.html");
+
 #[derive(Clone)]
 struct AppState {
     log_state: Arc<RwLock<LogState>>,
@@ -65,49 +66,86 @@ fn log_kind_name(kind: LogKind) -> &'static str {
 }
 
 /* ===========================
- *  METRIKY
+ *  METRICS – s prefixem
  * ===========================
  */
+
+/// Vrátí název metriky s ohledem na METRICS_PREFIX:
+/// - <nil> / prázdné → původní název
+/// - jinak: prefix (bez koncových "_") + "_" + base
+fn metric_name(base: &str) -> String {
+    match env::var("METRICS_PREFIX") {
+        Ok(val) => {
+            let v = val.trim();
+            if v.is_empty() {
+                base.to_string()
+            } else {
+                let cleaned = v.trim_end_matches('_');
+                if cleaned.is_empty() {
+                    base.to_string()
+                } else {
+                    format!("{}_{}", cleaned, base)
+                }
+            }
+        }
+        Err(_) => base.to_string(),
+    }
+}
 
 lazy_static! {
     static ref HTTP_STATUS_TOTAL: IntCounterVec = IntCounterVec::new(
         Opts::new(
-            "nginx_http_status_total",
+            &metric_name("nginx_http_status_total"),
             "Total number of responses by HTTP status code"
         ),
         &["status"]
     )
     .unwrap();
+
     static ref HTTP_STATUS_CLASS_TOTAL: IntCounterVec = IntCounterVec::new(
         Opts::new(
-            "nginx_http_status_class_total",
+            &metric_name("nginx_http_status_class_total"),
             "Total number of responses by HTTP status class"
         ),
         &["class"]
     )
     .unwrap();
+
     static ref HTTP_502_TOTAL: IntCounter = IntCounter::new(
-        "nginx_http_502_total",
+        &metric_name("nginx_http_502_total"),
         "Number of HTTP 502 Bad Gateway responses"
     )
     .unwrap();
+
     static ref UPSTREAM_STATUS_TOTAL: IntCounterVec = IntCounterVec::new(
         Opts::new(
-            "nginx_upstream_status_total",
+            &metric_name("nginx_upstream_status_total"),
             "Total upstream responses by upstream_addr and status"
         ),
         &["upstream_addr", "status"]
     )
     .unwrap();
+
+    // Upstream-related errors parsed from error.log
+    static ref UPSTREAM_ERROR_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            &metric_name("nginx_upstream_error_total"),
+            "Upstream-related errors from error.log, classified by reason"
+        ),
+        &["reason", "upstream"]
+    )
+    .unwrap();
+
     static ref HTTP_REQUEST_DURATION_SECONDS: HistogramVec = {
         let buckets = linear_buckets(0.01, 0.05, 20).expect("invalid histogram buckets");
         let opts = HistogramOpts::new(
-            "nginx_http_request_duration_seconds",
+            &metric_name("nginx_http_request_duration_seconds"),
             "Histogram of Nginx request_time in seconds, labelled by upstream_addr",
         )
         .buckets(buckets);
         HistogramVec::new(opts, &["upstream_addr"]).unwrap()
     };
+
     static ref REGISTRY: Registry = {
         let registry = Registry::new();
         registry
@@ -122,6 +160,9 @@ lazy_static! {
         registry
             .register(Box::new(UPSTREAM_STATUS_TOTAL.clone()))
             .expect("register upstream_status_total");
+        registry
+            .register(Box::new(UPSTREAM_ERROR_TOTAL.clone()))
+            .expect("register upstream_error_total");
         registry
             .register(Box::new(HTTP_REQUEST_DURATION_SECONDS.clone()))
             .expect("register http_request_duration_seconds");
@@ -143,9 +184,9 @@ async fn main() {
     let error_log_path =
         env::var("ERROR_LOG_PATH").unwrap_or_else(|_| "/app/logs/error.log".to_string());
 
-    // Prefix pro UI (např. "/es-proxy")
     let ui_prefix_raw = env::var("NGINX_UI_PUBLIC_PREFIX").unwrap_or_default();
     let ui_prefix = normalize_prefix(&ui_prefix_raw);
+
     let ui_title = env::var("NGINX_UI_TITLE").unwrap_or_else(|_| "Nginx logs".to_string());
 
     let state = AppState {
@@ -167,7 +208,6 @@ async fn main() {
         tail_file_loop(error_log_path, LogKind::Error, state_for_error).await;
     });
 
-    // Router – základní cesty
     let mut app = Router::new()
         .route("/", get(ui_handler))
         .route("/ui", get(ui_handler))
@@ -177,7 +217,7 @@ async fn main() {
         .route("/error.log.gz", get(download_error_log_handler))
         .route("/logs/stream", get(logs_sse_handler));
 
-    // Prefixované routy (např. "/es-proxy/ui", "/es-proxy/logs/stream")
+    // prefixované routy – např. /es-proxy/ui
     if let Some(prefix) = ui_prefix {
         let prefix_root = prefix.clone();
         let prefix_ui = format!("{}/ui", prefix_root);
@@ -210,13 +250,16 @@ fn normalize_prefix(s: &str) -> Option<String> {
     if s.is_empty() || s == "/" {
         return None;
     }
+
     let mut pref = s.to_string();
+
     if !pref.starts_with('/') {
         pref = format!("/{}", pref);
     }
     while pref.ends_with('/') {
         pref.pop();
     }
+
     if pref.is_empty() || pref == "/" {
         None
     } else {
@@ -235,7 +278,6 @@ async fn tail_file_loop(path: String, kind: LogKind, state: AppState) {
             Ok(mut file) => {
                 println!("Opened log file {:?} for {:?}", path, log_kind_name(kind));
 
-                // Startujeme na konci souboru (tail -F chování)
                 if let Err(e) = file.seek(std::io::SeekFrom::End(0)).await {
                     eprintln!("Failed to seek to end of {}: {}", path, e);
                 }
@@ -252,7 +294,6 @@ async fn tail_file_loop(path: String, kind: LogKind, state: AppState) {
                     line.clear();
                     match reader.read_line(&mut line).await {
                         Ok(0) => {
-                            // EOF – zkontrolujeme rotaci / truncnutí
                             match tokio::fs::metadata(&path).await {
                                 Ok(meta) => {
                                     let len = meta.len();
@@ -299,7 +340,6 @@ async fn handle_log_line(line: &str, kind: LogKind, state: &AppState) {
     let now = SystemTime::now();
 
     {
-        // update ring bufferů pro UI + healthz
         let mut log_state = state.log_state.write().await;
         match kind {
             LogKind::Access => {
@@ -321,10 +361,15 @@ async fn handle_log_line(line: &str, kind: LogKind, state: &AppState) {
         }
     }
 
-    // Access log -> parsujeme a plníme metriky
-    if let LogKind::Access = kind {
-        let parsed = parser::parse_access_line(line);
-        metrics_layer::record_access(&parsed);
+    // Access / error log -> metriky
+    match kind {
+        LogKind::Access => {
+            let parsed = parser::parse_access_line(line);
+            metrics_layer::record_access(&parsed);
+        }
+        LogKind::Error => {
+            metrics_layer::record_error(line);
+        }
     }
 }
 
@@ -348,7 +393,7 @@ mod parser {
     pub fn parse_access_line(line: &str) -> ParsedAccess {
         let status = parse_status_code_from_access(line);
 
-        // upstream_status=200,502,... → bereme první
+        // upstream_status=200,502 nebo "-"
         let upstream_status = extract_kv_value(line, "upstream_status=")
             .and_then(|v| v.split(',').next())
             .and_then(parse_status_field);
@@ -372,8 +417,6 @@ mod parser {
         }
     }
 
-    // Status z Nginx combined formátu:
-    // <ip> - <user> [time] "<request>" <status> ...
     fn parse_status_code_from_access(line: &str) -> Option<u16> {
         let first_quote = line.find('"')?;
         let rest = &line[first_quote + 1..];
@@ -444,6 +487,41 @@ mod metrics_layer {
                 .with_label_values(&[upstream_label])
                 .observe(rt);
         }
+    }
+
+    /// Zpracování řádků z error.log – upstream chyby podle reason + upstream.
+    pub fn record_error(line: &str) {
+        // Zajímá nás jen něco, co se týká upstreamu
+        if !line.contains("upstream") {
+            return;
+        }
+
+        let reason = if line.contains("no live upstreams") {
+            "no_live_upstream"
+        } else if line.contains("upstream timed out") {
+            "timeout"
+        } else if line.contains("connect() failed") || line.contains("Connection refused") {
+            "connect_failed"
+        } else if line.contains("SSL_do_handshake() failed") || line.contains("SSL handshake") {
+            "ssl_handshake"
+        } else {
+            "other"
+        };
+
+        let upstream = extract_upstream_from_error(line);
+        UPSTREAM_ERROR_TOTAL
+            .with_label_values(&[reason, upstream.as_str()])
+            .inc();
+    }
+
+    fn extract_upstream_from_error(line: &str) -> String {
+        if let Some(idx) = line.find("upstream: \"") {
+            let rest = &line[idx + "upstream: \"".len()..];
+            if let Some(end) = rest.find('"') {
+                return rest[..end].to_string();
+            }
+        }
+        "<unknown>".to_string()
     }
 }
 
