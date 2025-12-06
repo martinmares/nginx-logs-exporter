@@ -1,268 +1,349 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>__TITLE__</title>
+
+  <!-- Fomantic UI -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.css">
+
   <style>
-    :root {
-      color-scheme: dark;
-    }
     body {
+      background-color: #1b1c1d;
+    }
+
+    /* Hlavní wrapper – full-width + padding, žádný max-width */
+    .page-container {
       margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top left, #0f172a 0, #020617 55%, #000 100%);
-      color: #e5e7eb;
+      padding: 1.5rem 1.5rem 3rem 1.5rem;
     }
-    .app-shell {
-      min-height: 100vh;
+
+    /* Header jako u actuator-proxy */
+    .top-header {
       display: flex;
-      flex-direction: column;
-    }
-    .header {
-      padding: 16px 24px;
-      border-bottom: 1px solid rgba(15,23,42,0.9);
-      background: linear-gradient(90deg, rgba(15,23,42,0.95), rgba(30,64,175,0.4));
-      box-shadow: 0 10px 30px rgba(15,23,42,0.8);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    .header-top {
-      display: flex;
-      justify-content: space-between;
       align-items: center;
-      gap: 1rem;
-      flex-wrap: wrap;
+      justify-content: space-between;
+      margin-bottom: 1rem;         /* menší mezera pod headerem */
+      padding-bottom: 0.75rem;     /* menší padding */
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
-    h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      letter-spacing: 0.03em;
+
+    .top-header-left .ui.header {
       margin: 0;
     }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      padding: 0.15rem 0.5rem;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.4);
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: #9ca3af;
+
+    .top-header-left .ui.header .sub.header {
+      font-size: 0.95rem;
+      opacity: 0.8;
     }
-    .badge-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: radial-gradient(circle, #22c55e, #16a34a);
-      box-shadow: 0 0 8px rgba(34,197,94,0.7);
-    }
-    .controls-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      flex-wrap: wrap;
-      margin-top: 12px;
-    }
-    .controls {
+
+    .top-header-right {
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      flex-wrap: wrap;
-      font-size: 0.9rem;
     }
-    .controls label {
-      margin-right: 0.15rem;
-      color: #9ca3af;
-    }
-    .controls select {
-      padding: 0.2rem 0.6rem;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.5);
-      background: rgba(15,23,42,0.9);
-      color: #e5e7eb;
+
+    .top-header-right .download-label {
       font-size: 0.85rem;
-      outline: none;
-    }
-    .controls button {
-      padding: 0.25rem 0.9rem;
-      border-radius: 999px;
-      font-size: 0.85rem;
-      cursor: pointer;
-      transition: filter 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      opacity: 0.9;
+      color: rgba(255, 255, 255, 0.9);   /* aby nebyla černá */
     }
 
-    /* hlavní (Apply) */
-    .controls button.primary {
-      border: 1px solid rgba(59,130,246,0.6);
-      background: radial-gradient(circle at top left, #1d4ed8, #1e40af);
-      color: #e5e7eb;
-      box-shadow: 0 6px 18px rgba(37,99,235,0.45);
+    .top-header-right .ui.button {
+      margin-left: 0.25rem;
     }
 
-    /* základní vzhled Pause (není pauznuté) */
-    #pause-btn {
-      border: 1px solid rgba(148,163,184,0.8);
-      background: transparent;
-      color: #e5e7eb;
-      box-shadow: none;
+    .controls-segment {
+      margin-bottom: 1.5rem;
     }
 
-    /* když je pauznuté → „warning“ look */
-    #pause-btn.paused {
-      border-color: rgba(248,113,113,0.9);
-      background: radial-gradient(circle at top left, rgba(248,113,113,0.18), rgba(127,29,29,0.55));
-      color: #fee2e2;
-      box-shadow: 0 0 12px rgba(248,113,113,0.6);
+    /* labely ve formu – aby nebyly černé */
+    .controls-segment .ui.form .field > label {
+      color: rgba(255, 255, 255, 0.9) !important;
     }
 
-    .controls button:hover {
-      filter: brightness(1.08);
+    .top-hint {
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      opacity: 0.8;
     }
 
-    .downloads {
-      font-size: 0.9rem;
-      color: #9ca3af;
+    /* Terminálová okna pro logy – vertikálně pod sebou */
+    .logs-grid {
+      margin-top: 1.25rem;
     }
-    .downloads a {
-      margin-left: 0.5rem;
-      color: #93c5fd;
-      text-decoration: none;
+
+    .logs-grid .column {
+      margin-bottom: 1.75rem;
     }
-    .downloads a:hover {
-      text-decoration: underline;
+
+    .terminal-window {
+      background: #111 !important;
+      border-radius: 0.9rem !important;
+      /* výraznější stín, aby to působilo jako okno */
+      box-shadow: 0 26px 60px rgba(0, 0, 0, 0.9);
+      padding: 0 !important;
+      border: 1px solid rgba(255, 255, 255, 0.06);
     }
-    .content {
-      padding: 16px 24px 24px;
-      flex: 1;
-    }
-    .logs-container {
+
+    .terminal-header {
       display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
+      align-items: center;
+      padding: 0.55rem 0.9rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.08),
+        rgba(255, 255, 255, 0.02)
+      );
     }
-    .log-box {
-      flex: 1 1 0;
-      min-width: 320px;
+
+    .terminal-dots {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-right: 0.8rem;
     }
-    .log-title {
+
+    .terminal-dot {
+      width: 0.7rem;
+      height: 0.7rem;
+      border-radius: 999px;
+      background-color: #ff5f56;
+    }
+
+    .terminal-dot:nth-child(2) {
+      background-color: #ffbd2e;
+    }
+
+    .terminal-dot:nth-child(3) {
+      background-color: #27c93f;
+    }
+
+    .terminal-title {
+      font-size: 0.9rem;
       font-weight: 600;
-      margin-bottom: 6px;
     }
-    .log-card {
-      background: radial-gradient(circle at top left, rgba(15,23,42,0.98), rgba(15,23,42,0.96));
-      border-radius: 12px;
-      border: 1px solid rgba(30,64,175,0.6);
-      box-shadow: 0 18px 40px rgba(15,23,42,0.9);
-      padding: 6px;
+
+    .terminal-subtitle {
+      font-size: 0.8rem;
+      opacity: 0.8;
+      margin-left: 0.35rem;
     }
-    pre {
-      background: #020617;
-      color: #e5e7eb;
-      padding: 0.5rem;
-      border-radius: 8px;
-      max-height: 70vh;
+
+    .terminal-body {
+      padding: 0.6rem 0.8rem 0.75rem 0.8rem;
+    }
+
+    .log-output {
+      background: transparent !important;
+      color: #f9fafb !important;
+      /* fixní výška – oba logy stejné, error.log neujíždí dolů */
+      height: 32vh;
+      max-height: none;
       overflow-y: auto;
-      font-size: 12px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+      font-size: 0.8rem;
+      white-space: pre;
       margin: 0;
-      border: 1px solid rgba(15,23,42,0.9);
     }
-    .hint {
-      margin-top: 8px;
-      font-size: 0.75rem;
-      color: #6b7280;
+
+    .log-output::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    .log-output::-webkit-scrollbar-thumb {
+      background-color: #444;
+      border-radius: 4px;
     }
   </style>
 </head>
-<body>
-  <div class="app-shell">
-    <header class="header">
-      <div class="header-top">
-        <div>
-          <h1>__TITLE__</h1>
-          <div class="badge">
-            <span class="badge-dot"></span>
-            <span>live tail via sse</span>
-          </div>
-        </div>
-        <div class="downloads">
-          <strong>Download:</strong>
-          <a href="access.log.gz">access.log (gz)</a>
-          <a href="error.log.gz">error.log (gz)</a>
-        </div>
-      </div>
-      <div class="controls-row">
-        <form id="controls-form" class="controls">
-          <label for="limit">Lines per log</label>
-          <select name="limit" id="limit">
-            __LIMIT_OPTIONS__
-          </select>
-          <label for="refresh">Refresh</label>
-          <select name="refresh" id="refresh">
-            __REFRESH_OPTIONS__
-          </select>
-          <button type="submit" class="primary">Apply</button>
-          <button type="button" id="pause-btn">Pause</button>
-        </form>
-      </div>
-    </header>
+<body class="ui inverted">
 
-    <main class="content">
-      <div class="logs-container">
-        <section class="log-box">
-          <div class="log-title">access.log (latest __LIMIT__ lines)</div>
-          <div class="log-card">
-            <pre id="access-log">__ACCESS__</pre>
+  <div class="page-container">
+    <!-- Header -->
+    <div class="top-header">
+      <div class="top-header-left">
+        <h1 class="ui inverted header">
+          <i class="file alternate outline icon"></i>
+          <div class="content">
+            <span id="page-title">__TITLE__</span>
+            <div class="sub header">
+              Nginx access/error log viewer
+            </div>
           </div>
-        </section>
-        <section class="log-box">
-          <div class="log-title">error.log (latest __LIMIT__ lines)</div>
-          <div class="log-card">
-            <pre id="error-log">__ERROR__</pre>
-          </div>
-        </section>
+        </h1>
       </div>
-      <p class="hint">
-        Newest entries are shown at the top. Logs are updated live; controls change how many lines are kept in view and how often the server pushes updates.
-      </p>
-    </main>
+      <div class="top-header-right">
+        <div id="sse-status" class="ui green tiny label">
+          <i class="circle icon"></i>
+          LIVE
+        </div>
+        <span class="download-label">Download:</span>
+        <a href="access.log.gz" class="ui mini inverted basic button">access.log (gz)</a>
+        <a href="error.log.gz" class="ui mini inverted basic button">error.log (gz)</a>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="ui inverted segment controls-segment">
+      <form id="controls-form" class="ui form">
+        <div class="fields">
+          <div class="field">
+            <label>Lines per log</label>
+            <select name="limit" id="limit" class="ui dropdown">
+              __LIMIT_OPTIONS__
+            </select>
+          </div>
+          <div class="field">
+            <label>Refresh</label>
+            <select name="refresh" id="refresh" class="ui dropdown">
+              __REFRESH_OPTIONS__
+            </select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button type="submit" class="ui primary button">
+              <i class="play icon"></i>
+              Apply
+            </button>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button type="button" id="pause-btn" class="ui basic red button">
+              <i class="pause icon"></i>
+              Pause
+            </button>
+          </div>
+        </div>
+      </form>
+      <div class="top-hint">
+        Newest entries are shown at the top. Logs are updated live; controls change how many
+        lines are kept in view and how often the server pushes updates.
+      </div>
+    </div>
+
+    <!-- Logs – dva terminály pod sebou -->
+    <div class="ui grid logs-grid">
+      <div class="sixteen wide column">
+        <div class="ui inverted segment terminal-window">
+          <div class="terminal-header">
+            <div class="terminal-dots">
+              <span class="terminal-dot"></span>
+              <span class="terminal-dot"></span>
+              <span class="terminal-dot"></span>
+            </div>
+            <div class="terminal-title">access.log</div>
+            <div class="terminal-subtitle">
+              latest <span id="access-limit-label">__LIMIT__</span> lines
+            </div>
+          </div>
+          <div class="terminal-body">
+            <pre id="access-log" class="log-output">__ACCESS__</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="sixteen wide column">
+        <div class="ui inverted segment terminal-window">
+          <div class="terminal-header">
+            <div class="terminal-dots">
+              <span class="terminal-dot"></span>
+              <span class="terminal-dot"></span>
+              <span class="terminal-dot"></span>
+            </div>
+            <div class="terminal-title">error.log</div>
+            <div class="terminal-subtitle">
+              latest <span id="error-limit-label">__LIMIT__</span> lines
+            </div>
+          </div>
+          <div class="terminal-body">
+            <pre id="error-log" class="log-output">__ERROR__</pre>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <!-- JS -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.js"></script>
   <script>
-    (function() {
+    (function () {
+      'use strict';
+
       const limitSelect = document.getElementById('limit');
       const refreshSelect = document.getElementById('refresh');
       const form = document.getElementById('controls-form');
       const accessPre = document.getElementById('access-log');
       const errorPre = document.getElementById('error-log');
       const pauseBtn = document.getElementById('pause-btn');
+      const accessLimitLabel = document.getElementById('access-limit-label');
+      const errorLimitLabel = document.getElementById('error-limit-label');
+      const sseStatus = document.getElementById('sse-status');
+
+      // Fomantic dropdowns
+      if (window.jQuery) {
+        $('.ui.dropdown').dropdown();
+      }
 
       let es = null;
       let isPaused = false;
+
+      function setStatus(online) {
+        if (!sseStatus) return;
+        sseStatus.classList.remove('green', 'red');
+        sseStatus.classList.add(online ? 'green' : 'red');
+        sseStatus.innerHTML =
+          '<i class="circle icon"></i> ' + (online ? 'LIVE' : 'OFFLINE');
+      }
+
+      function updatePauseButton() {
+        if (!pauseBtn) return;
+        if (isPaused) {
+          pauseBtn.className = 'ui basic grey button';
+          pauseBtn.innerHTML = '<i class="play icon"></i>Continue';
+        } else {
+          pauseBtn.className = 'ui basic red button';
+          pauseBtn.innerHTML = '<i class="pause icon"></i>Pause';
+        }
+      }
 
       function startStream() {
         if (isPaused) {
           return;
         }
+
         if (es) {
           es.close();
+          es = null;
         }
 
         const limit = limitSelect.value;
         const interval = refreshSelect.value;
+
+        if (accessLimitLabel) accessLimitLabel.textContent = limit;
+        if (errorLimitLabel) errorLimitLabel.textContent = limit;
+
         const params = new URLSearchParams({ limit, interval });
         const sseUrl = 'logs/stream?' + params.toString();
 
-        es = new EventSource(sseUrl);
+        try {
+          es = new EventSource(sseUrl);
+        } catch (e) {
+          console.error('Failed to create EventSource', e);
+          setStatus(false);
+          return;
+        }
 
         es.onmessage = function (event) {
+          setStatus(true);
           try {
             const data = JSON.parse(event.data);
             if (Array.isArray(data.access)) {
+              // nejnovější nahoře
               accessPre.textContent = data.access.slice().reverse().join('\n');
             }
             if (Array.isArray(data.error)) {
@@ -275,6 +356,7 @@
 
         es.onerror = function (err) {
           console.error('SSE error', err);
+          setStatus(false);
         };
       }
 
@@ -291,24 +373,22 @@
 
       pauseBtn.addEventListener('click', function () {
         if (!isPaused) {
-          // Přechod do PAUSE
+          // Pause
           isPaused = true;
-          pauseBtn.textContent = 'Continue';
-          pauseBtn.classList.add('paused');
+          updatePauseButton();
           if (es) {
             es.close();
             es = null;
           }
         } else {
-          // Zpět na CONTINUE → resume
+          // Continue
           isPaused = false;
-          pauseBtn.textContent = 'Pause';
-          pauseBtn.classList.remove('paused');
+          updatePauseButton();
           startStream();
         }
       });
 
-      // initial connect
+      updatePauseButton();
       startStream();
     })();
   </script>
