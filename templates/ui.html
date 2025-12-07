@@ -155,11 +155,18 @@
       height: 32vh;
       max-height: none;
       overflow-y: auto;
+      overflow-x: auto;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
         "Liberation Mono", "Courier New", monospace;
       font-size: 0.8rem;
       white-space: pre;
+      tab-size: 4;
       margin: 0;
+    }
+
+    .log-output.wrap {
+      white-space: pre-wrap;
+      word-break: break-all;
     }
 
     .log-output::-webkit-scrollbar {
@@ -170,6 +177,13 @@
     .log-output::-webkit-scrollbar-thumb {
       background-color: #444;
       border-radius: 4px;
+    }
+
+    .log-highlight {
+      background-color: rgba(255, 255, 0, 0.25);
+      color: #fff;
+      border-radius: 0.15rem;
+      padding: 0 0.05em;
     }
   </style>
 </head>
@@ -256,6 +270,13 @@
             </div>
           </div>
           <div class="field">
+            <label>Wrap lines</label>
+            <div class="ui toggle checkbox">
+              <input type="checkbox" id="wrap-lines">
+              <label></label>
+            </div>
+          </div>
+          <div class="field">
             <label>&nbsp;</label>
             <button type="button" id="pause-btn" class="ui basic red button">
               <i class="pause icon"></i>
@@ -267,7 +288,8 @@
       <div class="top-hint">
         Newest entries are shown at the top. Logs are updated live; controls change how many
         lines are kept in view and how often the server pushes updates (choose 0s for realtime).
-        Filter is applied client-side on the latest N lines. Line numbers are purely visual.
+        Filter is applied client-side on the latest N lines. Line numbers and wrapping are purely
+        visual.
       </div>
     </div>
 
@@ -350,6 +372,7 @@
       const refreshSelect = document.getElementById('refresh');
       const filterInput = document.getElementById('log-filter');
       const lineNumberCheckbox = document.getElementById('line-numbers');
+      const wrapLinesCheckbox = document.getElementById('wrap-lines');
       const accessPre = document.getElementById('access-log');
       const errorPre = document.getElementById('error-log');
       const pauseBtn = document.getElementById('pause-btn');
@@ -369,6 +392,7 @@
       let latestErrorLines = [];
       let logFilter = '';
       let showLineNumbers = lineNumberCheckbox ? lineNumberCheckbox.checked : false;
+      let wrapLines = wrapLinesCheckbox ? wrapLinesCheckbox.checked : false;
 
       function copyTextToClipboard(text) {
         if (!text) text = '';
@@ -446,24 +470,69 @@
         });
       }
 
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      function highlightAndEscape(line, filterRaw, filterLower) {
+        const flen = filterRaw.length;
+        if (!flen) {
+          return escapeHtml(line);
+        }
+        const lowerLine = line.toLowerCase();
+        let result = '';
+        let index = 0;
+        while (true) {
+          const matchIndex = lowerLine.indexOf(filterLower, index);
+          if (matchIndex === -1) {
+            result += escapeHtml(line.slice(index));
+            break;
+          }
+          result += escapeHtml(line.slice(index, matchIndex));
+          result += '<span class="log-highlight">' +
+            escapeHtml(line.slice(matchIndex, matchIndex + flen)) +
+            '</span>';
+          index = matchIndex + flen;
+        }
+        return result;
+      }
+
+      function renderLines(preEl, lines, filterRaw, filterLower) {
+        if (!preEl) return;
+        const hasFilter = !!(filterLower && filterLower.length > 0);
+
+        const htmlLines = lines.map(function (line) {
+          if (!hasFilter) {
+            return escapeHtml(line);
+          }
+          return highlightAndEscape(line, filterRaw, filterLower);
+        });
+
+        preEl.innerHTML = htmlLines.join('\n');
+      }
+
       function renderLogs() {
         if (!accessPre || !errorPre) return;
 
-        const filter = (logFilter || '').toLowerCase();
+        const filterRaw = logFilter || '';
+        const filterLower = filterRaw.toLowerCase();
 
         const accessBase = latestAccessLines;
         const errorBase = latestErrorLines;
 
-        const accessFiltered = !filter
+        const accessFiltered = !filterLower
           ? accessBase
           : accessBase.filter(function (l) {
-              return l.toLowerCase().includes(filter);
+              return l.toLowerCase().includes(filterLower);
             });
 
-        const errorFiltered = !filter
+        const errorFiltered = !filterLower
           ? errorBase
           : errorBase.filter(function (l) {
-              return l.toLowerCase().includes(filter);
+              return l.toLowerCase().includes(filterLower);
             });
 
         let accessDisplay = accessFiltered;
@@ -474,8 +543,8 @@
           errorDisplay = formatWithLineNumbers(errorFiltered);
         }
 
-        accessPre.textContent = accessDisplay.join('\n');
-        errorPre.textContent = errorDisplay.join('\n');
+        renderLines(accessPre, accessDisplay, filterRaw, filterLower);
+        renderLines(errorPre, errorDisplay, filterRaw, filterLower);
       }
 
       function updateUrlParams() {
@@ -483,6 +552,17 @@
         url.searchParams.set('limit', limitSelect.value);
         url.searchParams.set('refresh', refreshSelect.value);
         window.history.replaceState(null, '', url.toString());
+      }
+
+      function updateWrapMode() {
+        if (!accessPre || !errorPre) return;
+        if (wrapLines) {
+          accessPre.classList.add('wrap');
+          errorPre.classList.add('wrap');
+        } else {
+          accessPre.classList.remove('wrap');
+          errorPre.classList.remove('wrap');
+        }
       }
 
       function startStream() {
@@ -565,6 +645,13 @@
         });
       }
 
+      if (wrapLinesCheckbox) {
+        wrapLinesCheckbox.addEventListener('change', function () {
+          wrapLines = wrapLinesCheckbox.checked;
+          updateWrapMode();
+        });
+      }
+
       pauseBtn.addEventListener('click', function () {
         if (!isPaused) {
           isPaused = true;
@@ -590,6 +677,7 @@
 
       updateLimitLabels();
       updatePauseButton();
+      updateWrapMode();
       renderLogs();
       startStream();
     })();
