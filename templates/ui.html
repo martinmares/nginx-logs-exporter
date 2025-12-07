@@ -12,10 +12,10 @@
       background-color: #1b1c1d;
     }
 
-    /* Hlavní wrapper – full-width + padding, žádný max-width */
+    /* Hlavní wrapper - full-width + padding, žádný max-width */
     .page-container {
       margin: 0;
-      padding: 1.5rem 1.5rem 3rem 1.5rem;
+      padding: 1.5rem 2.5rem 3rem 2.5rem;
     }
 
     /* Header jako u actuator-proxy */
@@ -23,8 +23,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 1rem;         /* menší mezera pod headerem */
-      padding-bottom: 0.75rem;     /* menší padding */
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
 
@@ -46,18 +46,28 @@
     .top-header-right .download-label {
       font-size: 0.85rem;
       opacity: 0.9;
-      color: rgba(255, 255, 255, 0.9);   /* aby nebyla černá */
+      color: rgba(255, 255, 255, 0.9);
     }
 
-    .top-header-right .ui.button {
-      margin-left: 0.25rem;
+    .download-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .download-group .ui.button {
+      margin-left: 0;
+    }
+
+    .download-group .copy-url-btn {
+      padding: 0.25rem 0.4rem !important;
     }
 
     .controls-segment {
       margin-bottom: 1.5rem;
     }
 
-    /* labely ve formu – aby nebyly černé */
+    /* labely ve formu - aby nebyly černé */
     .controls-segment .ui.form .field > label {
       color: rgba(255, 255, 255, 0.9) !important;
     }
@@ -68,7 +78,7 @@
       opacity: 0.8;
     }
 
-    /* Terminálová okna pro logy – vertikálně pod sebou */
+    /* Terminálová okna pro logy - vertikálně pod sebou */
     .logs-grid {
       margin-top: 1.25rem;
     }
@@ -80,7 +90,6 @@
     .terminal-window {
       background: #111 !important;
       border-radius: 0.9rem !important;
-      /* výraznější stín, aby to působilo jako okno */
       box-shadow: 0 26px 60px rgba(0, 0, 0, 0.9);
       padding: 0 !important;
       border: 1px solid rgba(255, 255, 255, 0.06);
@@ -89,6 +98,7 @@
     .terminal-header {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       padding: 0.55rem 0.9rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       background: linear-gradient(
@@ -96,6 +106,11 @@
         rgba(255, 255, 255, 0.08),
         rgba(255, 255, 255, 0.02)
       );
+    }
+
+    .terminal-left {
+      display: flex;
+      align-items: center;
     }
 
     .terminal-dots {
@@ -128,7 +143,10 @@
     .terminal-subtitle {
       font-size: 0.8rem;
       opacity: 0.8;
-      margin-left: 0.35rem;
+    }
+
+    .terminal-actions .copy-log-btn {
+      padding: 0.25rem 0.4rem !important;
     }
 
     .terminal-body {
@@ -138,8 +156,7 @@
     .log-output {
       background: transparent !important;
       color: #f9fafb !important;
-      /* fixní výška – oba logy stejné, error.log neujíždí dolů */
-      height: 32vh;
+      height: 32vh;      /* fixní výška - oba logy stejné */
       max-height: none;
       overflow-y: auto;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
@@ -181,9 +198,34 @@
           <i class="circle icon"></i>
           LIVE
         </div>
+
         <span class="download-label">Download:</span>
-        <a href="access.log.gz" class="ui mini inverted basic button">access.log (gz)</a>
-        <a href="error.log.gz" class="ui mini inverted basic button">error.log (gz)</a>
+
+        <div class="download-group">
+          <a id="download-access" href="access.log.gz" class="ui mini inverted basic button">
+            access.log (gz)
+          </a>
+          <button
+            type="button"
+            class="ui mini inverted icon button copy-url-btn"
+            data-href="access.log.gz"
+            title="Copy URL to clipboard">
+            <i class="copy icon"></i>
+          </button>
+        </div>
+
+        <div class="download-group">
+          <a id="download-error" href="error.log.gz" class="ui mini inverted basic button">
+            error.log (gz)
+          </a>
+          <button
+            type="button"
+            class="ui mini inverted icon button copy-url-btn"
+            data-href="error.log.gz"
+            title="Copy URL to clipboard">
+            <i class="copy icon"></i>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -221,23 +263,36 @@
       </form>
       <div class="top-hint">
         Newest entries are shown at the top. Logs are updated live; controls change how many
-        lines are kept in view and how often the server pushes updates.
+        lines are kept in view and how often the server pushes updates (choose 0s for realtime).
       </div>
     </div>
 
-    <!-- Logs – dva terminály pod sebou -->
+    <!-- Logs - dva terminály pod sebou -->
     <div class="ui grid logs-grid">
       <div class="sixteen wide column">
         <div class="ui inverted segment terminal-window">
           <div class="terminal-header">
-            <div class="terminal-dots">
-              <span class="terminal-dot"></span>
-              <span class="terminal-dot"></span>
-              <span class="terminal-dot"></span>
+            <div class="terminal-left">
+              <div class="terminal-dots">
+                <span class="terminal-dot"></span>
+                <span class="terminal-dot"></span>
+                <span class="terminal-dot"></span>
+              </div>
+              <div>
+                <div class="terminal-title">access.log</div>
+                <div class="terminal-subtitle">
+                  latest <span id="access-limit-label">__LIMIT__</span> lines
+                </div>
+              </div>
             </div>
-            <div class="terminal-title">access.log</div>
-            <div class="terminal-subtitle">
-              latest <span id="access-limit-label">__LIMIT__</span> lines
+            <div class="terminal-actions">
+              <button
+                type="button"
+                class="ui mini inverted icon button copy-log-btn"
+                data-target="access-log"
+                title="Copy visible access.log to clipboard">
+                <i class="copy icon"></i>
+              </button>
             </div>
           </div>
           <div class="terminal-body">
@@ -249,14 +304,27 @@
       <div class="sixteen wide column">
         <div class="ui inverted segment terminal-window">
           <div class="terminal-header">
-            <div class="terminal-dots">
-              <span class="terminal-dot"></span>
-              <span class="terminal-dot"></span>
-              <span class="terminal-dot"></span>
+            <div class="terminal-left">
+              <div class="terminal-dots">
+                <span class="terminal-dot"></span>
+                <span class="terminal-dot"></span>
+                <span class="terminal-dot"></span>
+              </div>
+              <div>
+                <div class="terminal-title">error.log</div>
+                <div class="terminal-subtitle">
+                  latest <span id="error-limit-label">__LIMIT__</span> lines
+                </div>
+              </div>
             </div>
-            <div class="terminal-title">error.log</div>
-            <div class="terminal-subtitle">
-              latest <span id="error-limit-label">__LIMIT__</span> lines
+            <div class="terminal-actions">
+              <button
+                type="button"
+                class="ui mini inverted icon button copy-log-btn"
+                data-target="error-log"
+                title="Copy visible error.log to clipboard">
+                <i class="copy icon"></i>
+              </button>
             </div>
           </div>
           <div class="terminal-body">
@@ -292,6 +360,51 @@
       let es = null;
       let isPaused = false;
 
+      function copyTextToClipboard(text) {
+        if (!text) text = '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).catch(function (err) {
+            console.error('Clipboard write failed', err);
+          });
+        } else {
+          // fallback
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.left = '-9999px';
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          try {
+            document.execCommand('copy');
+          } catch (err) {
+            console.error('execCommand copy failed', err);
+          }
+          document.body.removeChild(textarea);
+        }
+      }
+
+      // Copy visible log contents
+      document.querySelectorAll('.copy-log-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const targetId = btn.dataset.target;
+          const pre = document.getElementById(targetId);
+          if (pre) {
+            copyTextToClipboard(pre.textContent || '');
+          }
+        });
+      });
+
+      // Copy download URLs
+      document.querySelectorAll('.copy-url-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const href = btn.dataset.href;
+          if (!href) return;
+          const url = new URL(href, window.location.href).toString();
+          copyTextToClipboard(url);
+        });
+      });
+
       function setStatus(online) {
         if (!sseStatus) return;
         sseStatus.classList.remove('green', 'red');
@@ -311,6 +424,12 @@
         }
       }
 
+      function updateLimitLabels() {
+        const limit = limitSelect.value;
+        if (accessLimitLabel) accessLimitLabel.textContent = limit;
+        if (errorLimitLabel) errorLimitLabel.textContent = limit;
+      }
+
       function startStream() {
         if (isPaused) {
           return;
@@ -324,8 +443,7 @@
         const limit = limitSelect.value;
         const interval = refreshSelect.value;
 
-        if (accessLimitLabel) accessLimitLabel.textContent = limit;
-        if (errorLimitLabel) errorLimitLabel.textContent = limit;
+        updateLimitLabels();
 
         const params = new URLSearchParams({ limit, interval });
         const sseUrl = 'logs/stream?' + params.toString();
@@ -360,6 +478,9 @@
         };
       }
 
+      // aktualizace labelu okamžitě při změně selectu
+      limitSelect.addEventListener('change', updateLimitLabels);
+
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         const url = new URL(window.location.href);
@@ -388,6 +509,7 @@
         }
       });
 
+      updateLimitLabels();
       updatePauseButton();
       startStream();
     })();

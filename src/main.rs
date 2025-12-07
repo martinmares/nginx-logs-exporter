@@ -613,7 +613,7 @@ fn render_limit_options(current: usize) -> String {
 }
 
 fn render_refresh_options(current: u64) -> String {
-    let choices = [5u64, 10, 30, 60];
+    let choices = [0u64, 5, 10, 30, 60];
     let mut out = String::new();
     for &value in &choices {
         let selected = if value == current { " selected" } else { "" };
