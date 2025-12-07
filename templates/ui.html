@@ -12,13 +12,11 @@
       background-color: #1b1c1d;
     }
 
-    /* Hlavní wrapper – full-width + padding */
     .page-container {
       margin: 0;
       padding: 1.5rem 2.5rem 3rem 2.5rem;
     }
 
-    /* Header jako u actuator-proxy */
     .top-header {
       display: flex;
       align-items: center;
@@ -67,7 +65,6 @@
       margin-bottom: 1.5rem;
     }
 
-    /* labely ve formu – aby nebyly černé */
     .controls-segment .ui.form .field > label {
       color: rgba(255, 255, 255, 0.9) !important;
     }
@@ -78,7 +75,6 @@
       opacity: 0.8;
     }
 
-    /* Terminálová okna pro logy – vertikálně pod sebou */
     .logs-grid {
       margin-top: 1.25rem;
     }
@@ -156,7 +152,7 @@
     .log-output {
       background: transparent !important;
       color: #f9fafb !important;
-      height: 32vh;      /* fixní výška – oba logy stejné */
+      height: 32vh;
       max-height: none;
       overflow-y: auto;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
@@ -253,11 +249,11 @@
             </div>
           </div>
           <div class="field">
-            <label>&nbsp;</label>
-            <button type="submit" class="ui primary button">
-              <i class="play icon"></i>
-              Apply
-            </button>
+            <label>Line numbers</label>
+            <div class="ui toggle checkbox">
+              <input type="checkbox" id="line-numbers">
+              <label></label>
+            </div>
           </div>
           <div class="field">
             <label>&nbsp;</label>
@@ -271,11 +267,11 @@
       <div class="top-hint">
         Newest entries are shown at the top. Logs are updated live; controls change how many
         lines are kept in view and how often the server pushes updates (choose 0s for realtime).
-        Filter is applied client-side on the latest N lines.
+        Filter is applied client-side on the latest N lines. Line numbers are purely visual.
       </div>
     </div>
 
-    <!-- Logs – dva terminály pod sebou -->
+    <!-- Logs -->
     <div class="ui grid logs-grid">
       <div class="sixteen wide column">
         <div class="ui inverted segment terminal-window">
@@ -353,7 +349,7 @@
       const limitSelect = document.getElementById('limit');
       const refreshSelect = document.getElementById('refresh');
       const filterInput = document.getElementById('log-filter');
-      const form = document.getElementById('controls-form');
+      const lineNumberCheckbox = document.getElementById('line-numbers');
       const accessPre = document.getElementById('access-log');
       const errorPre = document.getElementById('error-log');
       const pauseBtn = document.getElementById('pause-btn');
@@ -361,18 +357,18 @@
       const errorLimitLabel = document.getElementById('error-limit-label');
       const sseStatus = document.getElementById('sse-status');
 
-      // Fomantic dropdowns
       if (window.jQuery) {
         $('.ui.dropdown').dropdown();
+        $('.ui.checkbox').checkbox();
       }
 
       let es = null;
       let isPaused = false;
 
-      // aktuální poslední N řádků (nejnovější první)
       let latestAccessLines = [];
       let latestErrorLines = [];
       let logFilter = '';
+      let showLineNumbers = lineNumberCheckbox ? lineNumberCheckbox.checked : false;
 
       function copyTextToClipboard(text) {
         if (!text) text = '';
@@ -397,7 +393,6 @@
         }
       }
 
-      // Copy visible log contents
       document.querySelectorAll('.copy-log-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
           const targetId = btn.dataset.target;
@@ -408,7 +403,6 @@
         });
       });
 
-      // Copy download URLs
       document.querySelectorAll('.copy-url-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
           const href = btn.dataset.href;
@@ -443,17 +437,52 @@
         if (errorLimitLabel) errorLimitLabel.textContent = limit;
       }
 
-      function renderLogs() {
-        const filter = (logFilter || '').toLowerCase();
-        const accessLines = !filter
-          ? latestAccessLines
-          : latestAccessLines.filter(l => l.toLowerCase().includes(filter));
-        const errorLines = !filter
-          ? latestErrorLines
-          : latestErrorLines.filter(l => l.toLowerCase().includes(filter));
+      function formatWithLineNumbers(lines) {
+        const count = lines.length;
+        const width = String(count > 0 ? count : 1).length;
+        return lines.map(function (line, idx) {
+          const no = String(idx + 1).padStart(width, ' ');
+          return no + ' | ' + line;
+        });
+      }
 
-        accessPre.textContent = accessLines.join('\n');
-        errorPre.textContent = errorLines.join('\n');
+      function renderLogs() {
+        if (!accessPre || !errorPre) return;
+
+        const filter = (logFilter || '').toLowerCase();
+
+        const accessBase = latestAccessLines;
+        const errorBase = latestErrorLines;
+
+        const accessFiltered = !filter
+          ? accessBase
+          : accessBase.filter(function (l) {
+              return l.toLowerCase().includes(filter);
+            });
+
+        const errorFiltered = !filter
+          ? errorBase
+          : errorBase.filter(function (l) {
+              return l.toLowerCase().includes(filter);
+            });
+
+        let accessDisplay = accessFiltered;
+        let errorDisplay = errorFiltered;
+
+        if (showLineNumbers) {
+          accessDisplay = formatWithLineNumbers(accessFiltered);
+          errorDisplay = formatWithLineNumbers(errorFiltered);
+        }
+
+        accessPre.textContent = accessDisplay.join('\n');
+        errorPre.textContent = errorDisplay.join('\n');
+      }
+
+      function updateUrlParams() {
+        const url = new URL(window.location.href);
+        url.searchParams.set('limit', limitSelect.value);
+        url.searchParams.set('refresh', refreshSelect.value);
+        window.history.replaceState(null, '', url.toString());
       }
 
       function startStream() {
@@ -488,7 +517,6 @@
             const data = JSON.parse(event.data);
 
             if (Array.isArray(data.access)) {
-              // nejnovější nahoře
               latestAccessLines = data.access.slice().reverse();
             }
             if (Array.isArray(data.error)) {
@@ -507,10 +535,22 @@
         };
       }
 
-      // aktualizace labelu okamžitě při změně selectu
-      limitSelect.addEventListener('change', updateLimitLabels);
+      // auto-apply na změnu limitu / refreshe
+      limitSelect.addEventListener('change', function () {
+        updateLimitLabels();
+        updateUrlParams();
+        if (!isPaused) {
+          startStream();
+        }
+      });
 
-      // filtr – klientská substring match (case-insensitive)
+      refreshSelect.addEventListener('change', function () {
+        updateUrlParams();
+        if (!isPaused) {
+          startStream();
+        }
+      });
+
       if (filterInput) {
         filterInput.addEventListener('input', function () {
           logFilter = filterInput.value || '';
@@ -518,20 +558,15 @@
         });
       }
 
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        const url = new URL(window.location.href);
-        url.searchParams.set('limit', limitSelect.value);
-        url.searchParams.set('refresh', refreshSelect.value);
-        window.history.replaceState(null, '', url.toString());
-        if (!isPaused) {
-          startStream();
-        }
-      });
+      if (lineNumberCheckbox) {
+        lineNumberCheckbox.addEventListener('change', function () {
+          showLineNumbers = lineNumberCheckbox.checked;
+          renderLogs();
+        });
+      }
 
       pauseBtn.addEventListener('click', function () {
         if (!isPaused) {
-          // Pause
           isPaused = true;
           updatePauseButton();
           if (es) {
@@ -539,14 +574,13 @@
             es = null;
           }
         } else {
-          // Continue
           isPaused = false;
           updatePauseButton();
           startStream();
         }
       });
 
-      // Initialize in-memory arrays from what server rendered in <pre> tags
+      // inicializace z toho, co poslal server
       if (accessPre && accessPre.textContent) {
         latestAccessLines = accessPre.textContent.split('\n');
       }
