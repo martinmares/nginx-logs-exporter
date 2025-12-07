@@ -12,7 +12,7 @@
       background-color: #1b1c1d;
     }
 
-    /* Hlavní wrapper - full-width + padding, žádný max-width */
+    /* Hlavní wrapper – full-width + padding */
     .page-container {
       margin: 0;
       padding: 1.5rem 2.5rem 3rem 2.5rem;
@@ -67,7 +67,7 @@
       margin-bottom: 1.5rem;
     }
 
-    /* labely ve formu - aby nebyly černé */
+    /* labely ve formu – aby nebyly černé */
     .controls-segment .ui.form .field > label {
       color: rgba(255, 255, 255, 0.9) !important;
     }
@@ -78,7 +78,7 @@
       opacity: 0.8;
     }
 
-    /* Terminálová okna pro logy - vertikálně pod sebou */
+    /* Terminálová okna pro logy – vertikálně pod sebou */
     .logs-grid {
       margin-top: 1.25rem;
     }
@@ -156,7 +156,7 @@
     .log-output {
       background: transparent !important;
       color: #f9fafb !important;
-      height: 32vh;      /* fixní výška - oba logy stejné */
+      height: 32vh;      /* fixní výška – oba logy stejné */
       max-height: none;
       overflow-y: auto;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
@@ -246,6 +246,13 @@
             </select>
           </div>
           <div class="field">
+            <label>Filter</label>
+            <div class="ui icon input">
+              <input id="log-filter" type="text" placeholder="substring, e.g. 10.220.18.2">
+              <i class="search icon"></i>
+            </div>
+          </div>
+          <div class="field">
             <label>&nbsp;</label>
             <button type="submit" class="ui primary button">
               <i class="play icon"></i>
@@ -264,10 +271,11 @@
       <div class="top-hint">
         Newest entries are shown at the top. Logs are updated live; controls change how many
         lines are kept in view and how often the server pushes updates (choose 0s for realtime).
+        Filter is applied client-side on the latest N lines.
       </div>
     </div>
 
-    <!-- Logs - dva terminály pod sebou -->
+    <!-- Logs – dva terminály pod sebou -->
     <div class="ui grid logs-grid">
       <div class="sixteen wide column">
         <div class="ui inverted segment terminal-window">
@@ -344,6 +352,7 @@
 
       const limitSelect = document.getElementById('limit');
       const refreshSelect = document.getElementById('refresh');
+      const filterInput = document.getElementById('log-filter');
       const form = document.getElementById('controls-form');
       const accessPre = document.getElementById('access-log');
       const errorPre = document.getElementById('error-log');
@@ -360,6 +369,11 @@
       let es = null;
       let isPaused = false;
 
+      // aktuální poslední N řádků (nejnovější první)
+      let latestAccessLines = [];
+      let latestErrorLines = [];
+      let logFilter = '';
+
       function copyTextToClipboard(text) {
         if (!text) text = '';
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -367,7 +381,6 @@
             console.error('Clipboard write failed', err);
           });
         } else {
-          // fallback
           const textarea = document.createElement('textarea');
           textarea.value = text;
           textarea.style.position = 'fixed';
@@ -430,6 +443,19 @@
         if (errorLimitLabel) errorLimitLabel.textContent = limit;
       }
 
+      function renderLogs() {
+        const filter = (logFilter || '').toLowerCase();
+        const accessLines = !filter
+          ? latestAccessLines
+          : latestAccessLines.filter(l => l.toLowerCase().includes(filter));
+        const errorLines = !filter
+          ? latestErrorLines
+          : latestErrorLines.filter(l => l.toLowerCase().includes(filter));
+
+        accessPre.textContent = accessLines.join('\n');
+        errorPre.textContent = errorLines.join('\n');
+      }
+
       function startStream() {
         if (isPaused) {
           return;
@@ -460,13 +486,16 @@
           setStatus(true);
           try {
             const data = JSON.parse(event.data);
+
             if (Array.isArray(data.access)) {
               // nejnovější nahoře
-              accessPre.textContent = data.access.slice().reverse().join('\n');
+              latestAccessLines = data.access.slice().reverse();
             }
             if (Array.isArray(data.error)) {
-              errorPre.textContent = data.error.slice().reverse().join('\n');
+              latestErrorLines = data.error.slice().reverse();
             }
+
+            renderLogs();
           } catch (e) {
             console.error('Failed to parse SSE payload', e);
           }
@@ -480,6 +509,14 @@
 
       // aktualizace labelu okamžitě při změně selectu
       limitSelect.addEventListener('change', updateLimitLabels);
+
+      // filtr – klientská substring match (case-insensitive)
+      if (filterInput) {
+        filterInput.addEventListener('input', function () {
+          logFilter = filterInput.value || '';
+          renderLogs();
+        });
+      }
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();
@@ -509,8 +546,17 @@
         }
       });
 
+      // Inicializace "state" z toho, co server vložil do __ACCESS__/__ERROR__
+      if (accessPre && accessPre.textContent) {
+        latestAccessLines = accessPre.textContent.split('\n');
+      }
+      if (errorPre && errorPre.textContent) {
+        latestErrorLines = errorPre.textContent.split('\n');
+      }
+
       updateLimitLabels();
       updatePauseButton();
+      renderLogs();
       startStream();
     })();
   </script>
