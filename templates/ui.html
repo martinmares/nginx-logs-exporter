@@ -546,7 +546,7 @@
         }
       });
 
-      // Inicializace "state" z toho, co server vložil do __ACCESS__/__ERROR__
+      // Initialize in-memory arrays from what server rendered in <pre> tags
       if (accessPre && accessPre.textContent) {
         latestAccessLines = accessPre.textContent.split('\n');
       }
