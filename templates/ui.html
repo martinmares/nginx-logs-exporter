@@ -1,369 +1,255 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="auto">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>__TITLE__</title>
-
-  <!-- Fomantic UI -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.css">
-
+  <script>
+    (function () {
+      const stored = localStorage.getItem('theme') || 'auto';
+      const resolved = stored === 'auto'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : stored;
+      document.documentElement.setAttribute('data-bs-theme', resolved);
+      document.documentElement.setAttribute('data-theme-preference', stored);
+    })();
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css?v=1">
   <style>
-    body {
-      background-color: #1b1c1d;
-    }
-
-    .page-container {
-      margin: 0;
-      padding: 1.5rem 2.5rem 3rem 2.5rem;
-    }
-
-    .top-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-      padding-bottom: 0.75rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .top-header-left .ui.header {
-      margin: 0;
-    }
-
-    .top-header-left .ui.header .sub.header {
-      font-size: 0.95rem;
-      opacity: 0.8;
-    }
-
-    .top-header-right {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    .top-header-right .download-label {
-      font-size: 0.85rem;
-      opacity: 0.9;
-      color: rgba(255, 255, 255, 0.9);
-    }
-
-    .download-group {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-    }
-
-    .download-group .ui.button {
-      margin-left: 0;
-    }
-
-    .download-group .copy-url-btn {
-      padding: 0.25rem 0.4rem !important;
-    }
-
-    .controls-segment {
-      margin-bottom: 1.5rem;
-    }
-
-    .controls-segment .ui.form .field > label {
-      color: rgba(255, 255, 255, 0.9) !important;
-    }
-
-    .top-hint {
-      margin-top: 0.5rem;
-      font-size: 0.8rem;
-      opacity: 0.8;
-    }
-
-    .logs-grid {
-      margin-top: 1.25rem;
-    }
-
-    .logs-grid .column {
-      margin-bottom: 1.75rem;
-    }
-
-    .terminal-window {
-      background: #111 !important;
-      border-radius: 0.9rem !important;
-      box-shadow: 0 26px 60px rgba(0, 0, 0, 0.9);
-      padding: 0 !important;
-      border: 1px solid rgba(255, 255, 255, 0.06);
+    .terminal-card {
+      border-color: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
     }
 
     .terminal-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.55rem 0.9rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.08),
-        rgba(255, 255, 255, 0.02)
-      );
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
 
-    .terminal-left {
+    .terminal-header-left {
       display: flex;
       align-items: center;
+      gap: 0.75rem;
+      min-width: 0;
     }
 
     .terminal-dots {
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-      margin-right: 0.8rem;
+      display: inline-flex;
+      gap: 0.375rem;
+      flex-shrink: 0;
     }
 
     .terminal-dot {
-      width: 0.7rem;
-      height: 0.7rem;
+      width: 0.75rem;
+      height: 0.75rem;
       border-radius: 999px;
-      background-color: #ff5f56;
+      display: inline-block;
     }
 
-    .terminal-dot:nth-child(2) {
-      background-color: #ffbd2e;
-    }
+    .terminal-dot.red { background: #ff5f57; }
+    .terminal-dot.yellow { background: #febc2e; }
+    .terminal-dot.green { background: #28c840; }
 
-    .terminal-dot:nth-child(3) {
-      background-color: #27c93f;
-    }
-
-    .terminal-title {
-      font-size: 0.9rem;
-      font-weight: 600;
+    .terminal-title-wrap {
+      min-width: 0;
     }
 
     .terminal-subtitle {
-      font-size: 0.8rem;
-      opacity: 0.8;
+      font-size: 0.75rem;
+      color: var(--tblr-secondary);
     }
 
-    .terminal-actions .copy-log-btn {
-      padding: 0.25rem 0.4rem !important;
+    .terminal-surface {
+      background: #111827;
+      color: #e5e7eb;
     }
 
-    .terminal-body {
-      padding: 0.6rem 0.8rem 0.75rem 0.8rem;
+    .terminal-output {
+      color: inherit;
     }
 
-    .log-output {
-      background: transparent !important;
-      color: #f9fafb !important;
-      height: 32vh;
-      max-height: none;
-      overflow-y: auto;
-      overflow-x: auto;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-        "Liberation Mono", "Courier New", monospace;
-      font-size: 0.8rem;
-      white-space: pre;
-      tab-size: 4;
-      margin: 0;
+    .brand-link {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: inherit;
+      text-decoration: none;
     }
 
-    .log-output.wrap {
-      white-space: pre-wrap;
-      word-break: break-all;
+    .brand-icon {
+      color: var(--tblr-secondary);
+      line-height: 1;
     }
 
-    .log-output::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
+    .brand-icon .ti {
+      font-size: 2rem;
     }
 
-    .log-output::-webkit-scrollbar-thumb {
-      background-color: #444;
-      border-radius: 4px;
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      line-height: 1.1;
     }
 
-    .log-highlight {
-      background-color: rgba(255, 255, 0, 0.25);
-      color: #fff;
-      border-radius: 0.15rem;
-      padding: 0 0.05em;
+    .brand-subtitle {
+      color: var(--tblr-secondary);
+      font-size: 0.8125rem;
+      line-height: 1.2;
+      margin-top: 0.125rem;
     }
   </style>
 </head>
-<body class="ui inverted">
-
-  <div class="page-container">
-    <!-- Header -->
-    <div class="top-header">
-      <div class="top-header-left">
-        <h1 class="ui inverted header">
-          <i class="file alternate outline icon"></i>
-          <div class="content">
-            <span id="page-title">__TITLE__</span>
-            <div class="sub header">
-              Nginx access/error log viewer
-            </div>
-          </div>
+<body>
+  <div class="page">
+    <header class="navbar navbar-expand-md d-print-none">
+      <div class="container-xl">
+        <h1 class="navbar-brand navbar-brand-autodark pe-0 pe-md-3 m-0">
+          <a href="./ui" class="brand-link">
+            <span class="brand-icon" aria-hidden="true"><i class="ti ti-file-text"></i></span>
+            <span>
+              <span class="brand-title">nginx-ui-logs</span>
+              <span class="brand-subtitle d-block">Nginx access/error log viewer</span>
+            </span>
+          </a>
         </h1>
-      </div>
-      <div class="top-header-right">
-        <div id="sse-status" class="ui green tiny label">
-          <i class="circle icon"></i>
-          LIVE
-        </div>
-
-        <span class="download-label">Download:</span>
-
-        <div class="download-group">
-          <a id="download-access" href="access.log.gz" class="ui mini inverted basic button">
-            access.log (gz)
-          </a>
-          <button
-            type="button"
-            class="ui mini inverted icon button copy-url-btn"
-            data-href="access.log.gz"
-            title="Copy URL to clipboard">
-            <i class="copy icon"></i>
-          </button>
-        </div>
-
-        <div class="download-group">
-          <a id="download-error" href="error.log.gz" class="ui mini inverted basic button">
-            error.log (gz)
-          </a>
-          <button
-            type="button"
-            class="ui mini inverted icon button copy-url-btn"
-            data-href="error.log.gz"
-            title="Copy URL to clipboard">
-            <i class="copy icon"></i>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Controls -->
-    <div class="ui inverted segment controls-segment">
-      <form id="controls-form" class="ui form">
-        <div class="fields">
-          <div class="field">
-            <label>Lines per log</label>
-            <select name="limit" id="limit" class="ui dropdown">
-              __LIMIT_OPTIONS__
-            </select>
-          </div>
-          <div class="field">
-            <label>Refresh</label>
-            <select name="refresh" id="refresh" class="ui dropdown">
-              __REFRESH_OPTIONS__
-            </select>
-          </div>
-          <div class="field">
-            <label>Filter</label>
-            <div class="ui icon input">
-              <input id="log-filter" type="text" placeholder="substring, e.g. 10.220.18.2">
-              <i class="search icon"></i>
-            </div>
-          </div>
-          <div class="field">
-            <label>Line numbers</label>
-            <div class="ui toggle checkbox">
-              <input type="checkbox" id="line-numbers">
-              <label></label>
-            </div>
-          </div>
-          <div class="field">
-            <label>Wrap lines</label>
-            <div class="ui toggle checkbox">
-              <input type="checkbox" id="wrap-lines">
-              <label></label>
-            </div>
-          </div>
-          <div class="field">
-            <label>&nbsp;</label>
-            <button type="button" id="pause-btn" class="ui basic red button">
-              <i class="pause icon"></i>
-              Pause
+        <div class="navbar-nav flex-row order-md-last align-items-center">
+          <div class="btn-list me-3">
+            <button type="button" id="pause-btn" class="btn btn-outline-danger btn-sm">
+              <i class="ti ti-player-pause me-1"></i>Pause
             </button>
-          </div>
-        </div>
-      </form>
-      <div class="top-hint">
-        Newest entries are shown at the top. Logs are updated live; controls change how many
-        lines are kept in view and how often the server pushes updates (choose 0s for realtime).
-        Filter is applied client-side on the latest N lines. Line numbers and wrapping are purely
-        visual.
-      </div>
-    </div>
-
-    <!-- Logs -->
-    <div class="ui grid logs-grid">
-      <div class="sixteen wide column">
-        <div class="ui inverted segment terminal-window">
-          <div class="terminal-header">
-            <div class="terminal-left">
-              <div class="terminal-dots">
-                <span class="terminal-dot"></span>
-                <span class="terminal-dot"></span>
-                <span class="terminal-dot"></span>
-              </div>
-              <div>
-                <div class="terminal-title">access.log</div>
-                <div class="terminal-subtitle">
-                  latest <span id="access-limit-label">__LIMIT__</span> lines
-                </div>
-              </div>
+            <span id="sse-status" class="badge bg-green-lt text-green-fg">
+              <i class="ti ti-activity-heartbeat me-1"></i>LIVE
+            </span>
+            <div class="btn-group" role="group">
+              <a id="download-access" href="access.log.gz" class="btn btn-outline-secondary btn-sm">
+                <i class="ti ti-download me-1"></i>Access
+              </a>
+              <button type="button" class="btn btn-outline-secondary btn-sm copy-url-btn" data-href="access.log.gz" title="Copy access download URL" aria-label="Copy access download URL"><i class="ti ti-copy me-1"></i>Copy URL</button>
             </div>
-            <div class="terminal-actions">
-              <button
-                type="button"
-                class="ui mini inverted icon button copy-log-btn"
-                data-target="access-log"
-                title="Copy visible access.log to clipboard">
-                <i class="copy icon"></i>
-              </button>
+            <div class="btn-group" role="group">
+              <a id="download-error" href="error.log.gz" class="btn btn-outline-secondary btn-sm">
+                <i class="ti ti-download me-1"></i>Error
+              </a>
+              <button type="button" class="btn btn-outline-secondary btn-sm copy-url-btn" data-href="error.log.gz" title="Copy error download URL" aria-label="Copy error download URL"><i class="ti ti-copy me-1"></i>Copy URL</button>
             </div>
           </div>
-          <div class="terminal-body">
-            <pre id="access-log" class="log-output">__ACCESS__</pre>
+          <div class="nav-item dropdown">
+            <a href="#" class="nav-link px-2" data-bs-toggle="dropdown" aria-label="Theme">
+              <i class="ti ti-palette"></i>
+            </a>
+            <div class="dropdown-menu dropdown-menu-end">
+              <a class="dropdown-item js-theme-option" href="#" data-theme-value="auto">Auto</a>
+              <a class="dropdown-item js-theme-option" href="#" data-theme-value="light">Light</a>
+              <a class="dropdown-item js-theme-option" href="#" data-theme-value="dark">Dark</a>
+            </div>
           </div>
         </div>
       </div>
+    </header>
 
-      <div class="sixteen wide column">
-        <div class="ui inverted segment terminal-window">
-          <div class="terminal-header">
-            <div class="terminal-left">
-              <div class="terminal-dots">
-                <span class="terminal-dot"></span>
-                <span class="terminal-dot"></span>
-                <span class="terminal-dot"></span>
-              </div>
-              <div>
-                <div class="terminal-title">error.log</div>
-                <div class="terminal-subtitle">
-                  latest <span id="error-limit-label">__LIMIT__</span> lines
+    <div class="page-wrapper">
+      <div class="page-body">
+        <div class="container-xl">
+          <div class="row row-cards mb-3">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-body">
+                  <form id="controls-form" class="row gx-3 gy-2 align-items-center">
+                    <div class="col-xl-2 col-lg-3">
+                      <label class="form-label mb-1">Lines/log</label>
+                      <select name="limit" id="limit" class="form-select">
+                        __LIMIT_OPTIONS__
+                      </select>
+                    </div>
+                    <div class="col-xl-2 col-lg-3">
+                      <label class="form-label mb-1">Refresh</label>
+                      <select name="refresh" id="refresh" class="form-select">
+                        __REFRESH_OPTIONS__
+                      </select>
+                    </div>
+                    <div class="col-xl-4 col-lg-6">
+                      <label class="form-label mb-1">Filter</label>
+                      <input id="log-filter" class="form-control" type="text" placeholder="substring, e.g. 10.220.18.2">
+                    </div>
+                    <div class="col-xl-2 col-lg-3 col-sm-6">
+                      <label class="form-label mb-1 d-block">Numbers</label>
+                      <label class="form-check form-switch mb-0">
+                        <input type="checkbox" class="form-check-input" id="line-numbers">
+                        <span class="form-check-label">On</span>
+                      </label>
+                    </div>
+                    <div class="col-xl-2 col-lg-3 col-sm-6">
+                      <label class="form-label mb-1 d-block">Wrap</label>
+                      <label class="form-check form-switch mb-0">
+                        <input type="checkbox" class="form-check-input" id="wrap-lines">
+                        <span class="form-check-label">On</span>
+                      </label>
+                    </div>
+                  </form>
                 </div>
               </div>
             </div>
-            <div class="terminal-actions">
-              <button
-                type="button"
-                class="ui mini inverted icon button copy-log-btn"
-                data-target="error-log"
-                title="Copy visible error.log to clipboard">
-                <i class="copy icon"></i>
-              </button>
-            </div>
           </div>
-          <div class="terminal-body">
-            <pre id="error-log" class="log-output">__ERROR__</pre>
+
+          <div class="row row-cards">
+            <div class="col-12">
+              <div class="card terminal-card terminal-surface">
+                <div class="terminal-header">
+                  <div class="terminal-header-left">
+                    <div class="terminal-dots" aria-hidden="true">
+                      <span class="terminal-dot red"></span>
+                      <span class="terminal-dot yellow"></span>
+                      <span class="terminal-dot green"></span>
+                    </div>
+                    <div class="terminal-title-wrap">
+                      <div>access.log <span class="terminal-subtitle">(latest <span id="access-limit-label">__LIMIT__</span> lines)</span></div>
+                    </div>
+                  </div>
+                  <div class="card-actions">
+                    <button type="button" class="btn btn-outline-secondary btn-sm copy-log-btn" data-target="access-log" title="Copy visible access.log" aria-label="Copy visible access.log"><i class="ti ti-copy me-1"></i>Copy log</button>
+                  </div>
+                </div>
+                <div class="card-body p-0 terminal-surface">
+                  <pre id="access-log" class="m-0 p-3 small terminal-output" style="height: 35vh; overflow: auto; white-space: pre; tab-size: 4; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;">__ACCESS__</pre>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="card terminal-card terminal-surface">
+                <div class="terminal-header">
+                  <div class="terminal-header-left">
+                    <div class="terminal-dots" aria-hidden="true">
+                      <span class="terminal-dot red"></span>
+                      <span class="terminal-dot yellow"></span>
+                      <span class="terminal-dot green"></span>
+                    </div>
+                    <div class="terminal-title-wrap">
+                      <div>error.log <span class="terminal-subtitle">(latest <span id="error-limit-label">__LIMIT__</span> lines)</span></div>
+                    </div>
+                  </div>
+                  <div class="card-actions">
+                    <button type="button" class="btn btn-outline-secondary btn-sm copy-log-btn" data-target="error-log" title="Copy visible error.log" aria-label="Copy visible error.log"><i class="ti ti-copy me-1"></i>Copy log</button>
+                  </div>
+                </div>
+                <div class="card-body p-0 terminal-surface">
+                  <pre id="error-log" class="m-0 p-3 small terminal-output" style="height: 35vh; overflow: auto; white-space: pre; tab-size: 4; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;">__ERROR__</pre>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- JS -->
-  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js"></script>
   <script>
     (function () {
       'use strict';
@@ -380,14 +266,35 @@
       const errorLimitLabel = document.getElementById('error-limit-label');
       const sseStatus = document.getElementById('sse-status');
 
-      if (window.jQuery) {
-        $('.ui.dropdown').dropdown();
-        $('.ui.checkbox').checkbox();
-      }
+      const themeOptions = document.querySelectorAll('.js-theme-option');
+      const applyTheme = (theme) => {
+        const resolved = theme === 'auto'
+          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : theme;
+        document.documentElement.setAttribute('data-bs-theme', resolved);
+        document.documentElement.setAttribute('data-theme-preference', theme);
+        localStorage.setItem('theme', theme);
+        themeOptions.forEach((item) => {
+          item.classList.toggle('active', item.dataset.themeValue === theme);
+        });
+      };
+
+      themeOptions.forEach((item) => {
+        item.classList.toggle('active', item.dataset.themeValue === (localStorage.getItem('theme') || 'auto'));
+        item.addEventListener('click', (event) => {
+          event.preventDefault();
+          applyTheme(item.dataset.themeValue);
+        });
+      });
+
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if ((localStorage.getItem('theme') || 'auto') === 'auto') {
+          applyTheme('auto');
+        }
+      });
 
       let es = null;
       let isPaused = false;
-
       let latestAccessLines = [];
       let latestErrorLines = [];
       let logFilter = '';
@@ -438,20 +345,22 @@
 
       function setStatus(online) {
         if (!sseStatus) return;
-        sseStatus.classList.remove('green', 'red');
-        sseStatus.classList.add(online ? 'green' : 'red');
-        sseStatus.innerHTML =
-          '<i class="circle icon"></i> ' + (online ? 'LIVE' : 'OFFLINE');
+        sseStatus.className = online
+          ? 'badge bg-green-lt text-green-fg'
+          : 'badge bg-red-lt text-red-fg';
+        sseStatus.innerHTML = online
+          ? '<i class="ti ti-activity-heartbeat me-1"></i>LIVE'
+          : '<i class="ti ti-plug-connected-x me-1"></i>OFFLINE';
       }
 
       function updatePauseButton() {
         if (!pauseBtn) return;
         if (isPaused) {
-          pauseBtn.className = 'ui basic grey button';
-          pauseBtn.innerHTML = '<i class="play icon"></i>Continue';
+          pauseBtn.className = 'btn btn-outline-secondary btn-sm';
+          pauseBtn.innerHTML = '<i class="ti ti-player-play me-1"></i>Continue';
         } else {
-          pauseBtn.className = 'ui basic red button';
-          pauseBtn.innerHTML = '<i class="pause icon"></i>Pause';
+          pauseBtn.className = 'btn btn-outline-danger btn-sm';
+          pauseBtn.innerHTML = '<i class="ti ti-player-pause me-1"></i>Pause';
         }
       }
 
@@ -492,9 +401,9 @@
             break;
           }
           result += escapeHtml(line.slice(index, matchIndex));
-          result += '<span class="log-highlight">' +
+          result += '<mark>' +
             escapeHtml(line.slice(matchIndex, matchIndex + flen)) +
-            '</span>';
+            '</mark>';
           index = matchIndex + flen;
         }
         return result;
@@ -514,26 +423,25 @@
         preEl.innerHTML = htmlLines.join('\n');
       }
 
+      function scrollToEnd(preEl) {
+        if (!preEl) return;
+        preEl.scrollTop = preEl.scrollHeight;
+      }
+
       function renderLogs() {
         if (!accessPre || !errorPre) return;
 
         const filterRaw = logFilter || '';
         const filterLower = filterRaw.toLowerCase();
-
         const accessBase = latestAccessLines;
         const errorBase = latestErrorLines;
 
-        const accessFiltered = !filterLower
-          ? accessBase
-          : accessBase.filter(function (l) {
-              return l.toLowerCase().includes(filterLower);
-            });
-
-        const errorFiltered = !filterLower
-          ? errorBase
-          : errorBase.filter(function (l) {
-              return l.toLowerCase().includes(filterLower);
-            });
+        const accessFiltered = !filterLower ? accessBase : accessBase.filter(function (l) {
+          return l.toLowerCase().includes(filterLower);
+        });
+        const errorFiltered = !filterLower ? errorBase : errorBase.filter(function (l) {
+          return l.toLowerCase().includes(filterLower);
+        });
 
         let accessDisplay = accessFiltered;
         let errorDisplay = errorFiltered;
@@ -545,6 +453,8 @@
 
         renderLines(accessPre, accessDisplay, filterRaw, filterLower);
         renderLines(errorPre, errorDisplay, filterRaw, filterLower);
+        scrollToEnd(accessPre);
+        scrollToEnd(errorPre);
       }
 
       function updateUrlParams() {
@@ -556,13 +466,18 @@
 
       function updateWrapMode() {
         if (!accessPre || !errorPre) return;
-        if (wrapLines) {
-          accessPre.classList.add('wrap');
-          errorPre.classList.add('wrap');
-        } else {
-          accessPre.classList.remove('wrap');
-          errorPre.classList.remove('wrap');
+        accessPre.style.whiteSpace = wrapLines ? 'pre-wrap' : 'pre';
+        errorPre.style.whiteSpace = wrapLines ? 'pre-wrap' : 'pre';
+        accessPre.style.wordBreak = wrapLines ? 'break-all' : 'normal';
+        errorPre.style.wordBreak = wrapLines ? 'break-all' : 'normal';
+      }
+
+      function effectiveStreamLimit() {
+        const baseLimit = Number(limitSelect.value || 50);
+        if (logFilter && logFilter.trim() !== '') {
+          return Math.max(baseLimit, 500);
         }
+        return baseLimit;
       }
 
       function startStream() {
@@ -575,9 +490,8 @@
           es = null;
         }
 
-        const limit = limitSelect.value;
+        const limit = String(effectiveStreamLimit());
         const interval = refreshSelect.value;
-
         updateLimitLabels();
 
         const params = new URLSearchParams({ limit, interval });
@@ -595,14 +509,12 @@
           setStatus(true);
           try {
             const data = JSON.parse(event.data);
-
             if (Array.isArray(data.access)) {
-              latestAccessLines = data.access.slice().reverse();
+              latestAccessLines = data.access.slice();
             }
             if (Array.isArray(data.error)) {
-              latestErrorLines = data.error.slice().reverse();
+              latestErrorLines = data.error.slice();
             }
-
             renderLogs();
           } catch (e) {
             console.error('Failed to parse SSE payload', e);
@@ -615,7 +527,6 @@
         };
       }
 
-      // auto-apply na změnu limitu / refreshe
       limitSelect.addEventListener('change', function () {
         updateLimitLabels();
         updateUrlParams();
@@ -633,8 +544,13 @@
 
       if (filterInput) {
         filterInput.addEventListener('input', function () {
+          const hadFilter = logFilter.trim() !== '';
           logFilter = filterInput.value || '';
           renderLogs();
+          const hasFilter = logFilter.trim() !== '';
+          if (hadFilter !== hasFilter && !isPaused) {
+            startStream();
+          }
         });
       }
 
@@ -667,7 +583,6 @@
         }
       });
 
-      // inicializace z toho, co poslal server
       if (accessPre && accessPre.textContent) {
         latestAccessLines = accessPre.textContent.split('\n');
       }

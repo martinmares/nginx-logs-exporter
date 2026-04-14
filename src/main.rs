@@ -30,6 +30,9 @@ use tokio::{
     sync::RwLock,
     time::sleep,
 };
+use tower_http::trace::TraceLayer;
+use tracing::{error, info, warn};
+use tracing_subscriber::{EnvFilter, fmt};
 
 const MAX_LINES_PER_LOG: usize = 2000;
 const UI_TEMPLATE: &str = include_str!("../templates/ui.html");
@@ -177,6 +180,8 @@ lazy_static! {
 
 #[tokio::main]
 async fn main() {
+    init_tracing();
+
     let listen_addr = env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:9100".to_string());
 
     let access_log_path =
@@ -224,7 +229,7 @@ async fn main() {
         let prefix_access = format!("{}/access.log.gz", prefix_root);
         let prefix_error = format!("{}/error.log.gz", prefix_root);
         let prefix_stream = format!("{}/logs/stream", prefix_root);
-        println!(
+        info!(
             "Registering UI routes with prefix: '{}' and '{}'",
             prefix_root, prefix_ui
         );
@@ -236,13 +241,24 @@ async fn main() {
             .route(&prefix_stream, get(logs_sse_handler));
     }
 
-    let app = app.with_state(state);
+    let app = app.layer(TraceLayer::new_for_http()).with_state(state);
 
-    println!("Listening on {}", listen_addr);
+    info!(listen_addr = %listen_addr, "listening");
     let listener = tokio::net::TcpListener::bind(&listen_addr)
         .await
         .expect("failed to bind");
     axum::serve(listener, app).await.expect("server error");
+}
+
+fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("nginx_logs_exporter=info,tower_http=info"));
+
+    fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .compact()
+        .init();
 }
 
 fn normalize_prefix(s: &str) -> Option<String> {
@@ -276,10 +292,10 @@ async fn tail_file_loop(path: String, kind: LogKind, state: AppState) {
     loop {
         match File::open(&path).await {
             Ok(mut file) => {
-                println!("Opened log file {:?} for {:?}", path, log_kind_name(kind));
+                info!(path = %path, kind = log_kind_name(kind), "opened log file");
 
                 if let Err(e) = file.seek(std::io::SeekFrom::End(0)).await {
-                    eprintln!("Failed to seek to end of {}: {}", path, e);
+                    warn!(path = %path, error = %e, "failed to seek to end of log");
                 }
 
                 let mut reader = BufReader::new(file);
@@ -298,15 +314,12 @@ async fn tail_file_loop(path: String, kind: LogKind, state: AppState) {
                                 Ok(meta) => {
                                     let len = meta.len();
                                     if len < position {
-                                        println!(
-                                            "Detected rotation/truncation of {}, reopening",
-                                            path
-                                        );
+                                        info!(path = %path, "detected rotation or truncation, reopening");
                                         break;
                                     }
                                 }
                                 Err(e) => {
-                                    eprintln!("metadata() failed for {}: {}. Reopening.", path, e);
+                                    warn!(path = %path, error = %e, "metadata failed, reopening");
                                     break;
                                 }
                             }
@@ -321,7 +334,7 @@ async fn tail_file_loop(path: String, kind: LogKind, state: AppState) {
                             handle_log_line(&trimmed, kind, &state).await;
                         }
                         Err(e) => {
-                            eprintln!("Error reading {}: {}. Reopening in 1s.", path, e);
+                            warn!(path = %path, error = %e, "error reading log, reopening in 1s");
                             sleep(Duration::from_secs(1)).await;
                             break;
                         }
@@ -329,7 +342,7 @@ async fn tail_file_loop(path: String, kind: LogKind, state: AppState) {
                 }
             }
             Err(e) => {
-                eprintln!("Could not open log file {}: {}. Retrying in 5s.", path, e);
+                warn!(path = %path, error = %e, "could not open log file, retrying in 5s");
                 sleep(Duration::from_secs(5)).await;
             }
         }
@@ -714,13 +727,13 @@ async fn download_log_handler_impl(log_path: String, download_name: &'static str
         Ok(content) => {
             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
             if let Err(e) = encoder.write_all(&content) {
-                eprintln!("failed to gzip {}: {}", log_path, e);
+                error!(path = %log_path, error = %e, "failed to gzip log");
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
             let gz_bytes = match encoder.finish() {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    eprintln!("failed to finish gzip {}: {}", log_path, e);
+                    error!(path = %log_path, error = %e, "failed to finish gzip");
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
                 }
             };
@@ -728,19 +741,18 @@ async fn download_log_handler_impl(log_path: String, download_name: &'static str
             Response::builder()
                 .status(StatusCode::OK)
                 .header(CONTENT_TYPE, "application/gzip")
-                .header("Content-Encoding", "gzip")
                 .header(
                     "Content-Disposition",
                     format!("attachment; filename=\"{}\"", download_name),
                 )
                 .body(gz_bytes.into())
                 .unwrap_or_else(|e| {
-                    eprintln!("failed to build response for {}: {}", log_path, e);
+                    error!(path = %log_path, error = %e, "failed to build download response");
                     StatusCode::INTERNAL_SERVER_ERROR.into_response()
                 })
         }
         Err(e) => {
-            eprintln!("failed to read log file {}: {}", log_path, e);
+            error!(path = %log_path, error = %e, "failed to read log file");
             StatusCode::NOT_FOUND.into_response()
         }
     }
@@ -791,14 +803,14 @@ async fn metrics_handler() -> Response {
     let mut buffer = Vec::new();
 
     if let Err(e) = encoder.encode(&metric_families, &mut buffer) {
-        eprintln!("Error encoding metrics: {}", e);
+        error!(error = %e, "error encoding metrics");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
     let body = match String::from_utf8(buffer) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("metrics UTF-8 error: {}", e);
+            error!(error = %e, "metrics utf-8 error");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
